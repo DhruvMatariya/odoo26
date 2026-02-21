@@ -30,6 +30,7 @@ const vehicleRoutes = require('./routes/vehicle.routes');
 const driverRoutes = require('./routes/driver.routes');
 const tripRoutes = require('./routes/trip.routes');
 const maintenanceRoutes = require('./routes/maintenance.routes');
+const expenseRoutes = require('./routes/expense.routes');
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -64,6 +65,7 @@ app.use('/vehicles', vehicleRoutes);
 app.use('/drivers', driverRoutes);
 app.use('/trips', tripRoutes);
 app.use('/maintenance', maintenanceRoutes);
+app.use('/expenses', expenseRoutes);
 
 app.get('/ping', (req, res) => {
   res.json({
@@ -83,6 +85,9 @@ app.get('/ping', (req, res) => {
       'GET /maintenance',
       'POST /maintenance',
       'PATCH /maintenance/:id/status',
+      'GET /expenses',
+      'POST /expenses',
+      'DELETE /expenses/:id',
     ],
   });
 });

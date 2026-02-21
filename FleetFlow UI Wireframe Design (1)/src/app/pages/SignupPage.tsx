@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { User, Mail, Lock, Building2, ChevronDown, Eye, EyeOff, AlertCircle, Check, Truck, ArrowLeft } from 'lucide-react';
 import { AuthBackground } from '../components/auth/AuthBackground';
@@ -191,8 +191,6 @@ const SIGNUP_CSS = `
 const ROLE_DESCRIPTIONS: Record<string, string> = {
   'Fleet Manager':       'Full system access including analytics, vehicle registry, and reports.',
   'Dispatcher':          'Create and manage trip assignments, dispatch routes, and cargo loads.',
-  'Safety Officer':      'Monitor driver compliance, license expiration, and safety scores.',
-  'Financial Analyst':   'Access expense reports, fuel costs, and operational financial analytics.',
 };
 
 function PasswordStrength({ password }: { password: string }) {
@@ -236,51 +234,7 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-function OTPInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const refs = useRef<Array<HTMLInputElement | null>>([]);
-
-  const handleChange = (index: number, val: string) => {
-    const newVal = [...value];
-    newVal[index] = val.replace(/\D/g, '').slice(-1);
-    onChange(newVal);
-    if (val && index < 5) refs.current[index + 1]?.focus();
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !value[index] && index > 0) {
-      refs.current[index - 1]?.focus();
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    const newVal = pasted.split('').concat(Array(6).fill('')).slice(0, 6);
-    onChange(newVal);
-    refs.current[Math.min(pasted.length, 5)]?.focus();
-  };
-
-  return (
-    <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-      {value.map((char, i) => (
-        <input
-          key={i}
-          ref={el => { refs.current[i] = el; }}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
-          value={char}
-          onChange={e => handleChange(i, e.target.value)}
-          onKeyDown={e => handleKeyDown(i, e)}
-          onPaste={handlePaste}
-          className={`sg-otp-box${char ? ' filled' : ''}`}
-        />
-      ))}
-    </div>
-  );
-}
-
-type Step = 1 | 2 | 3;
+type Step = 1 | 2;
 
 export function SignupPage() {
   const navigate = useNavigate();
@@ -298,10 +252,9 @@ export function SignupPage() {
   // Step 2
   const [role, setRole] = useState('Fleet Manager');
   const [fleet, setFleet] = useState('');
+  const [orgId, setOrgId] = useState('');
   const [region, setRegion] = useState('');
 
-  // Step 3
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Errors
@@ -324,33 +277,26 @@ export function SignupPage() {
 
   const validateStep2 = () => {
     const e: Record<string, string> = {};
-    if (!fleet.trim()) e.fleet = 'Organization name is required.';
+    if (isManager && !fleet.trim()) e.fleet = 'Organization name is required.';
+    if (!isManager && !orgId.trim()) e.orgId = 'Organisation ID is required.';
     if (!region) e.region = 'Please select a region.';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
+  const isManager = role === 'Fleet Manager';
+
   const handleNext = () => {
     if (step === 1 && validateStep1()) advance(2);
-    else if (step === 2 && validateStep2()) advance(3);
+    else if (step === 2 && validateStep2()) handleSubmit();
   };
 
   const handleBack = () => {
     if (step === 2) advance(1);
-    else if (step === 3) advance(2);
   };
 
   const handleSubmit = async () => {
-    const accessCode = otp.join('').trim();
-    if (accessCode.length !== 6) {
-      setErrors({ otp: 'Enter all 6 digits of the access code.' });
-      return;
-    }
     const roleLower = role === 'Fleet Manager' ? 'manager' : 'dispatcher';
-    if (roleLower === 'dispatcher' && !accessCode) {
-      setErrors({ otp: 'Access code is required for Dispatchers.' });
-      return;
-    }
     setIsSubmitting(true);
     setErrors({});
     const result = await authApi.signup({
@@ -359,10 +305,10 @@ export function SignupPage() {
       password,
       role: roleLower as 'manager' | 'dispatcher',
       ...(roleLower === 'manager' && { organisationName: fleet.trim() || 'My Organisation' }),
-      ...(roleLower === 'dispatcher' && { accessCode }),
+      ...(roleLower === 'dispatcher' && { organisationId: orgId.trim() }),
     });
     if ('error' in result) {
-      setErrors({ otp: result.error || 'Signup failed. Try again.' });
+      setErrors({ submit: result.error || 'Signup failed. Try again.' });
       setIsSubmitting(false);
       return;
     }
@@ -373,7 +319,6 @@ export function SignupPage() {
   const STEPS = [
     { n: 1, label: 'Account' },
     { n: 2, label: 'Role' },
-    { n: 3, label: 'Access' },
   ];
 
   return (
@@ -589,8 +534,6 @@ export function SignupPage() {
                     <select className="sg-select" value={role} onChange={e => setRole(e.target.value)}>
                       <option>Fleet Manager</option>
                       <option>Dispatcher</option>
-                      <option>Safety Officer</option>
-                      <option>Financial Analyst</option>
                     </select>
                     <span className="sg-select-icon"><ChevronDown size={15} /></span>
                   </div>
@@ -600,14 +543,29 @@ export function SignupPage() {
                     </p>
                   </div>
                 </div>
-                <div className="sg-fade-2">
-                  <label className="sg-label">Fleet / Organization Name</label>
-                  <div className="sg-input-wrap">
-                    <span className="sg-input-icon"><Building2 size={15} /></span>
-                    <input className="sg-input" placeholder="e.g. Apex Logistics Ltd" value={fleet} onChange={e => setFleet(e.target.value)} />
+                {isManager && (
+                  <div className="sg-fade-2">
+                    <label className="sg-label">Fleet / Organization Name</label>
+                    <div className="sg-input-wrap">
+                      <span className="sg-input-icon"><Building2 size={15} /></span>
+                      <input className="sg-input" placeholder="e.g. Apex Logistics Ltd" value={fleet} onChange={e => setFleet(e.target.value)} />
+                    </div>
+                    {errors.fleet && <ErrorMsg msg={errors.fleet} />}
                   </div>
-                  {errors.fleet && <ErrorMsg msg={errors.fleet} />}
-                </div>
+                )}
+                {!isManager && (
+                  <div className="sg-fade-2">
+                    <label className="sg-label">Organisation ID</label>
+                    <div className="sg-input-wrap">
+                      <span className="sg-input-icon"><Building2 size={15} /></span>
+                      <input className="sg-input" placeholder="Enter the Organisation ID from your manager" value={orgId} onChange={e => setOrgId(e.target.value)} />
+                    </div>
+                    <p style={{ fontFamily: '"Sora", sans-serif', fontSize: 11, color: '#64748B', margin: '6px 0 0', lineHeight: 1.5 }}>
+                      Ask your Fleet Manager for the Organisation ID from their profile.
+                    </p>
+                    {errors.orgId && <ErrorMsg msg={errors.orgId} />}
+                  </div>
+                )}
                 <div className="sg-fade-3">
                   <label className="sg-label">Region</label>
                   <div className="sg-select-wrap">
@@ -623,43 +581,13 @@ export function SignupPage() {
                 </div>
                 <div className="sg-fade-4" style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                   <button className="sg-btn-outline" onClick={handleBack} type="button" style={{ flex: '0 0 110px' }}>← Back</button>
-                  <button className="sg-btn-primary" onClick={handleNext} type="button" style={{ flex: 1 }}>Continue →</button>
-                </div>
-              </div>
-            )}
-
-            {/* ── STEP 3: Access Code ── */}
-            {step === 3 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div className="sg-fade-1">
-                  <p style={{ fontFamily: '"Sora", sans-serif', fontSize: 13, color: '#64748B', lineHeight: 1.7, margin: '0 0 16px' }}>
-                    Enter the <strong style={{ color: '#94A3B8' }}>6-digit access code</strong> provided by your Fleet Administrator.
-                  </p>
-                  <div style={{ background: '#0D1017', border: '1px solid #1E2330', borderRadius: 10, padding: '24px 16px', textAlign: 'center' }}>
-                    <label style={{ fontFamily: '"DM Mono", monospace', fontSize: 10, color: '#334155', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: 16 }}>
-                      Access Code
-                    </label>
-                    <OTPInput value={otp} onChange={setOtp} />
-                    {errors.otp && <div style={{ marginTop: 10 }}><ErrorMsg msg={errors.otp} /></div>}
-                  </div>
-                  <div style={{ background: '#0D1017', border: '1px solid #1E2330', borderRadius: 8, padding: '12px 14px', marginTop: 14 }}>
-                    <p style={{ fontFamily: '"DM Mono", monospace', fontSize: 10, color: '#334155', marginBottom: 6, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Summary</p>
-                    {[{ label: 'Name', val: name }, { label: 'Email', val: email }, { label: 'Role', val: role }, { label: 'Fleet', val: fleet }].map(item => (
-                      <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: '"DM Mono", monospace', fontSize: 11, marginBottom: 3 }}>
-                        <span style={{ color: '#334155' }}>{item.label}</span>
-                        <span style={{ color: '#64748B' }}>{item.val || '—'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="sg-fade-2" style={{ display: 'flex', gap: 10 }}>
-                  <button className="sg-btn-outline" onClick={handleBack} type="button" style={{ flex: '0 0 110px' }}>← Back</button>
-                  <button className="sg-btn-primary" onClick={handleSubmit} type="button" style={{ flex: 1 }} disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <><svg width="16" height="16" viewBox="0 0 24 24" style={{ animation: 'spinSignup 1s linear infinite' }}><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" fill="none" /><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" /></svg>Creating...</>
-                    ) : 'Create Account'}
+                  <button className="sg-btn-primary" onClick={handleNext} type="button" style={{ flex: 1 }} disabled={isSubmitting}>
+                    {isSubmitting
+                      ? <><svg width="16" height="16" viewBox="0 0 24 24" style={{ animation: 'spinSignup 1s linear infinite' }}><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3" fill="none" /><path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" /></svg>Creating...</>
+                      : 'Create Account'}
                   </button>
                 </div>
+                {errors.submit && <ErrorMsg msg={errors.submit} />}
               </div>
             )}
           </div>

@@ -16,7 +16,7 @@ function signToken(payload) {
 }
 
 async function signup(req, res) {
-  const { name, email, password, role, organisationName, accessCode } = req.body;
+  const { name, email, password, role, organisationName, accessCode, organisationId } = req.body;
 
   if (!name || !email || !password || !role)
     return res.status(400).json({ error: "Missing required fields" });
@@ -74,21 +74,21 @@ async function signup(req, res) {
 
     // ===== DISPATCHER FLOW =====
     if (roleLower === "dispatcher") {
-      if (!accessCode || String(accessCode).length !== 6)
-        throw new Error("Valid access code required");
+      if (!organisationId)
+        throw new Error("Organisation ID is required");
 
       const orgCheck = await client.query(
-        "SELECT name FROM organisations WHERE access_code=$1 LIMIT 1",
-        [accessCode]
+        "SELECT name, access_code FROM organisations WHERE id=$1 AND role='manager' LIMIT 1",
+        [organisationId]
       );
 
       if (!orgCheck.rows.length)
-        throw new Error("Invalid access code");
+        throw new Error("Invalid organisation ID");
 
       await client.query(
         `INSERT INTO organisations (name, access_code, user_id, role)
          VALUES ($1,$2,$3,$4)`,
-        [orgCheck.rows[0].name, accessCode, user.id, roleLower]
+        [orgCheck.rows[0].name, orgCheck.rows[0].access_code, user.id, roleLower]
       );
 
       await client.query("COMMIT");
@@ -162,7 +162,7 @@ async function login(req, res) {
 
     return res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, access_code, organisation_id },
     });
 
   } catch (err) {

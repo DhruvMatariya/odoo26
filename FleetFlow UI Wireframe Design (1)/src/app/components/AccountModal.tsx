@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Camera, User, Mail, Shield, Save, Check, Pencil } from 'lucide-react';
+import { X, Camera, User, Mail, Shield, Save, Check, Pencil, Copy, Key, Building2 } from 'lucide-react';
 import { useApp, UserRole } from '../context/AppContext';
 
 interface AccountModalProps {
@@ -258,6 +258,7 @@ export function AccountModal({ isOpen, onClose }: AccountModalProps) {
   const [previewPic, setPreviewPic] = useState<string | undefined>(undefined);
   const [saved, setSaved] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // Sync state when modal opens
   useEffect(() => {
@@ -499,6 +500,76 @@ export function AccountModal({ isOpen, onClose }: AccountModalProps) {
                   read-only
                 </span>
               </div>
+
+              {/* Organisation Access Code (managers only) */}
+              {currentUser.role === 'Fleet Manager' && currentUser.organisationId && (
+                <div className="acct-info-row" style={{ borderColor: 'rgba(139,92,246,0.2)', background: 'rgba(139,92,246,0.04)' }}>
+                  <div className="acct-info-icon" style={{ background: 'rgba(139,92,246,0.12)', borderColor: 'rgba(139,92,246,0.2)' }}>
+                    <Building2 size={15} style={{ color: '#8B5CF6' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: 11, color: '#64748B', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>Organisation ID</p>
+                    <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: '#8B5CF6', margin: 0, fontWeight: 600 }}>
+                      {currentUser.organisationId}
+                    </p>
+                  </div>
+                  <span style={{
+                    fontFamily: "'Poppins', sans-serif",
+                    fontSize: 10,
+                    color: '#334155',
+                    background: '#0A0C10',
+                    border: '1px solid #1A2030',
+                    borderRadius: 4,
+                    padding: '2px 7px',
+                    flexShrink: 0,
+                    fontWeight: 500,
+                  }}>
+                    read-only
+                  </span>
+                </div>
+              )}
+
+              {currentUser.role === 'Fleet Manager' && currentUser.accessCode && (
+                <div className="acct-info-row" style={{ borderColor: 'rgba(59,130,246,0.2)', background: 'rgba(59,130,246,0.04)' }}>
+                  <div className="acct-info-icon" style={{ background: 'rgba(59,130,246,0.12)', borderColor: 'rgba(59,130,246,0.2)' }}>
+                    <Key size={15} style={{ color: '#3B82F6' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: 11, color: '#64748B', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>Organisation Access Code</p>
+                    <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, color: '#3B82F6', margin: 0, fontWeight: 700, letterSpacing: '0.25em' }}>
+                      {currentUser.accessCode}
+                    </p>
+                    <p style={{ fontFamily: "'Poppins', sans-serif", fontSize: 10, color: '#64748B', margin: '4px 0 0', lineHeight: 1.4 }}>
+                      Share this code with dispatchers so they can join your organisation
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(currentUser.accessCode!);
+                      setCodeCopied(true);
+                      setTimeout(() => setCodeCopied(false), 2000);
+                    }}
+                    style={{
+                      background: codeCopied ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.1)',
+                      border: `1px solid ${codeCopied ? 'rgba(16,185,129,0.25)' : 'rgba(59,130,246,0.2)'}`,
+                      borderRadius: 8,
+                      padding: '6px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      cursor: 'pointer',
+                      color: codeCopied ? '#10B981' : '#3B82F6',
+                      fontFamily: "'Poppins', sans-serif",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      transition: 'all 200ms',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {codeCopied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy</>}
+                  </button>
+                </div>
+              )}
 
               {/* User ID */}
               <div className="acct-info-row">

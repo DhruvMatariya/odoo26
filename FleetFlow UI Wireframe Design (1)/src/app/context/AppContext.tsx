@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { getStoredSession, setStoredSession, clearStoredSession } from '../services/auth';
-import { authApi, vehiclesApi, driversApi, tripsApi, maintenanceApi } from '../services/api';
+import { authApi, vehiclesApi, driversApi, tripsApi, maintenanceApi, expensesApi } from '../services/api';
 import type { BackendDriver } from '../services/api';
 
 export type UserRole = 'Admin' | 'Fleet Manager' | 'Dispatcher' | 'Driver';
@@ -11,6 +11,8 @@ export interface User {
   email: string;
   role: UserRole;
   profilePic?: string;
+  accessCode?: string;
+  organisationId?: string;
 }
 
 export interface Vehicle {
@@ -84,12 +86,7 @@ const INITIAL_TRIPS: Trip[] = [];
 
 const INITIAL_MAINTENANCE: MaintenanceLog[] = [];
 
-const INITIAL_EXPENSES: Expense[] = [
-  { id: 'EX-001', tripId: 'TR-001', fuelAmount: 120, fuelCost: 18000, otherExpense: 2500, expenseNote: 'Toll fees', date: '2024-01-15' },
-  { id: 'EX-002', tripId: 'TR-002', fuelAmount: 45, fuelCost: 6750, otherExpense: 500, expenseNote: 'Parking', date: '2024-01-14' },
-  { id: 'EX-003', tripId: 'TR-003', fuelAmount: 85, fuelCost: 12750, otherExpense: 1800, expenseNote: 'Toll + refreshments', date: '2024-01-15' },
-  { id: 'EX-004', tripId: 'TR-004', fuelAmount: 8, fuelCost: 1200, otherExpense: 0, expenseNote: '', date: '2024-01-13' },
-];
+const INITIAL_EXPENSES: Expense[] = [];
 
 function mapBackendRole(role: string): UserRole {
   const r = (role || '').toLowerCase();
@@ -121,7 +118,9 @@ interface AppContextType {
   addMaintenanceLog: (log: Omit<MaintenanceLog, 'id'>) => Promise<{ success: boolean; error?: string }>;
   fetchMaintenance: () => Promise<void>;
   updateMaintenanceStatus: (id: string, status: MaintenanceLog['status']) => Promise<{ success: boolean; error?: string }>;
-  addExpense: (expense: Omit<Expense, 'id'>) => void;
+  addExpense: (expense: Omit<Expense, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  fetchExpenses: () => Promise<void>;
+  deleteExpense: (id: string) => Promise<{ success: boolean; error?: string }>;
   updateVehicleStatus: (id: string, status: Vehicle['status']) => Promise<{ success: boolean; error?: string }>;
   updateDriverStatus: (id: string, status: Driver['status']) => Promise<{ success: boolean; error?: string }>;
   updateTripStatus: (id: string, status: Trip['status']) => Promise<{ success: boolean; error?: string }>;
@@ -211,14 +210,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Load vehicles, drivers, trips, and maintenance when authenticated
+  const fetchExpenses = useCallback(async () => {
+    const result = await expensesApi.list();
+    if ('error' in result) {
+      console.error('Failed to load expenses:', result.error);
+    } else {
+      setExpenses(result);
+    }
+  }, []);
+
+  // Load vehicles, drivers, trips, maintenance, and expenses when authenticated
   useEffect(() => {
     if (!authReady || !isAuthenticated) return;
     fetchVehicles();
     fetchDrivers();
     fetchTrips();
     fetchMaintenance();
-  }, [authReady, isAuthenticated, fetchVehicles, fetchDrivers, fetchTrips, fetchMaintenance]);
+    fetchExpenses();
+  }, [authReady, isAuthenticated, fetchVehicles, fetchDrivers, fetchTrips, fetchMaintenance, fetchExpenses]);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     const result = await authApi.login(email, password);
@@ -230,6 +239,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       name: result.user.name,
       email: result.user.email,
       role: mapBackendRole(result.user.role),
+      accessCode: result.user.access_code,
+      organisationId: result.user.organisation_id,
     };
     setCurrentUser(user);
     setIsAuthenticated(true);
@@ -321,9 +332,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { success: true };
   };
 
-  const addExpense = (expense: Omit<Expense, 'id'>) => {
-    const id = `EX-${String(expenses.length + 1).padStart(3, '0')}`;
-    setExpenses(prev => [...prev, { ...expense, id }]);
+  const addExpense = async (expense: Omit<Expense, 'id'>): Promise<{ success: boolean; error?: string }> => {
+    const result = await expensesApi.create({
+      tripId: expense.tripId,
+      fuelAmount: expense.fuelAmount,
+      fuelCost: expense.fuelCost,
+      otherExpense: expense.otherExpense,
+      expenseNote: expense.expenseNote,
+      date: expense.date,
+    });
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
+    setExpenses(prev => [...prev, result]);
+    return { success: true };
+  };
+
+  const deleteExpense = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const result = await expensesApi.remove(id);
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    return { success: true };
   };
 
   const updateVehicleStatus = async (id: string, status: Vehicle['status']): Promise<{ success: boolean; error?: string }> => {
@@ -373,7 +404,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       vehicles, drivers, trips, maintenance, expenses,
       login, logout, updateUser,
       addVehicle, fetchVehicles, addDriver, fetchDrivers, addTrip, fetchTrips,
-      addMaintenanceLog, fetchMaintenance, updateMaintenanceStatus, addExpense,
+      addMaintenanceLog, fetchMaintenance, updateMaintenanceStatus,
+      addExpense, fetchExpenses, deleteExpense,
       updateVehicleStatus, updateDriverStatus, updateTripStatus,
       getVehicleById, getDriverById,
     }}>

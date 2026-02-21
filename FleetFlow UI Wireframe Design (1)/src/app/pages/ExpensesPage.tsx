@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, Search, Download, Fuel, DollarSign, TrendingUp } from 'lucide-react';
+import { Plus, Search, Download, Fuel, DollarSign, TrendingUp, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Modal, FormField, inputCls, selectCls } from '../components/Modal';
+import { toast } from 'sonner';
 
 const DARK_CSS = `
   .ff-pg-card { background:#0D1017; border:1px solid #1E2330; border-radius:12px; }
@@ -27,11 +28,12 @@ const EMPTY_FORM = {
 };
 
 export function ExpensesPage() {
-  const { expenses, trips, addExpense, getVehicleById, getDriverById } = useApp();
+  const { expenses, trips, addExpense, deleteExpense, getVehicleById, getDriverById } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const completedTrips = trips.filter(t => t.status === 'Completed' || t.status === 'Dispatched');
   const filtered = expenses.filter(e =>
@@ -40,11 +42,23 @@ export function ExpensesPage() {
     e.expenseNote.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.tripId || !form.date) { setError('Please select a trip and date.'); return; }
-    addExpense({ tripId: form.tripId, fuelAmount: Number(form.fuelAmount) || 0, fuelCost: Number(form.fuelCost) || 0, otherExpense: Number(form.otherExpense) || 0, expenseNote: form.expenseNote, date: form.date });
-    setForm(EMPTY_FORM); setShowModal(false); setError('');
+    setSubmitting(true);
+    try {
+      const result = await addExpense({ tripId: form.tripId, fuelAmount: Number(form.fuelAmount) || 0, fuelCost: Number(form.fuelCost) || 0, otherExpense: Number(form.otherExpense) || 0, expenseNote: form.expenseNote, date: form.date });
+      if (result.success) {
+        toast.success('Expense entry created successfully.');
+        setForm(EMPTY_FORM); setShowModal(false); setError('');
+      } else {
+        setError(result.error || 'Failed to create expense.');
+      }
+    } catch {
+      setError('Unexpected error.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const field = (key: keyof typeof form, value: string) => setForm(prev => ({ ...prev, [key]: value }));
@@ -105,14 +119,14 @@ export function ExpensesPage() {
           <table className="ff-pg-table">
             <thead className="ff-pg-thead">
               <tr>
-                {['Entry ID', 'Trip ID', 'Driver', 'Vehicle', 'Fuel (L)', 'Fuel Cost', 'Other Expense', 'Note', 'Total Cost', 'Date'].map(col => (
+                {['Entry ID', 'Trip ID', 'Driver', 'Vehicle', 'Fuel (L)', 'Fuel Cost', 'Other Expense', 'Note', 'Total Cost', 'Date', ''].map(col => (
                   <th key={col} className="ff-pg-th">{col}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="ff-pg-tbody">
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} style={{ padding: '48px 20px', textAlign: 'center', fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#334155' }}>No expense entries found.</td></tr>
+                <tr><td colSpan={11} style={{ padding: '48px 20px', textAlign: 'center', fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#334155' }}>No expense entries found.</td></tr>
               ) : filtered.map(entry => {
                 const trip = trips.find(t => t.id === entry.tripId);
                 const vehicle = trip ? getVehicleById(trip.vehicleId) : undefined;
@@ -120,8 +134,8 @@ export function ExpensesPage() {
                 const total = entry.fuelCost + entry.otherExpense;
                 return (
                   <tr key={entry.id}>
-                    <td className="ff-pg-td" style={{ color: '#3B82F6', fontWeight: 600 }}>{entry.id}</td>
-                    <td className="ff-pg-td" style={{ color: '#F1F5F9', fontWeight: 500 }}>{entry.tripId}</td>
+                    <td className="ff-pg-td" style={{ color: '#3B82F6', fontWeight: 600 }}>{entry.id.slice(0, 8)}</td>
+                    <td className="ff-pg-td" style={{ color: '#F1F5F9', fontWeight: 500 }}>{entry.tripId.slice(0, 8)}</td>
                     <td className="ff-pg-td">{driver?.name ?? '—'}</td>
                     <td className="ff-pg-td">{vehicle?.model ?? '—'}</td>
                     <td className="ff-pg-td">{entry.fuelAmount} L</td>
@@ -130,6 +144,15 @@ export function ExpensesPage() {
                     <td className="ff-pg-td" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#64748B' }}>{entry.expenseNote || '—'}</td>
                     <td className="ff-pg-td" style={{ color: '#F1F5F9', fontWeight: 600 }}>KES {total.toLocaleString()}</td>
                     <td className="ff-pg-td" style={{ color: '#64748B', whiteSpace: 'nowrap' }}>{entry.date}</td>
+                    <td className="ff-pg-td">
+                      <button onClick={async () => {
+                        const r = await deleteExpense(entry.id);
+                        r.success ? toast.success('Expense deleted.') : toast.error(r.error || 'Failed.');
+                      }}
+                        style={{ background: 'rgba(239,68,68,.08)', color: '#EF4444', display: 'flex', alignItems: 'center', gap: 3, padding: '4px 10px', borderRadius: 6, border: 'none', fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        <Trash2 size={11} />Delete
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -155,7 +178,7 @@ export function ExpensesPage() {
               <option value="">— Select trip —</option>
               {completedTrips.map(t => {
                 const d = getDriverById(t.driverId);
-                return <option key={t.id} value={t.id}>{t.id} — {t.origin} → {t.destination} ({d?.name ?? '?'})</option>;
+                return <option key={t.id} value={t.id}>{t.id.slice(0, 8)} — {t.origin} → {t.destination} ({d?.name ?? '?'})</option>;
               })}
             </select>
           </FormField>
@@ -190,7 +213,7 @@ export function ExpensesPage() {
             <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#EF4444', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 8, padding: '10px 14px', margin: 0 }}>{error}</p>
           )}
           <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
-            <button type="submit" className="ff-pg-btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Save Entry</button>
+            <button type="submit" className="ff-pg-btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>{submitting ? 'Saving...' : 'Save Entry'}</button>
             <button type="button" className="ff-pg-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}
               onClick={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}>Cancel</button>
           </div>

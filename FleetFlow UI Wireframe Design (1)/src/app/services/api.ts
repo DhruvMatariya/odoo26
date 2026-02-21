@@ -16,6 +16,8 @@ export interface BackendUser {
   name: string;
   email: string;
   role: string;
+  access_code?: string;
+  organisation_id?: string;
 }
 
 export interface LoginResponse {
@@ -29,7 +31,7 @@ export interface SignupPayload {
   password: string;
   role: 'manager' | 'dispatcher';
   organisationName?: string;
-  accessCode?: string;
+  organisationId?: string;
 }
 
 export interface SignupResponse {
@@ -97,8 +99,8 @@ export const authApi = {
     if (payload.role === 'manager' && payload.organisationName != null) {
       body.organisationName = payload.organisationName.trim();
     }
-    if (payload.role === 'dispatcher' && payload.accessCode != null) {
-      body.accessCode = String(payload.accessCode).trim();
+    if (payload.role === 'dispatcher' && payload.organisationId != null) {
+      body.organisationId = String(payload.organisationId).trim();
     }
     const result = await request<SignupResponse>('/auth/signup', {
       method: 'POST',
@@ -349,6 +351,55 @@ export const maintenanceApi = {
     });
     if (result.error || !result.data) {
       return { error: result.error || 'Failed to update maintenance status' };
+    }
+    return result.data;
+  },
+};
+
+/** Backend expense shape */
+export interface BackendExpense {
+  id: string;
+  tripId: string;
+  fuelAmount: number;
+  fuelCost: number;
+  otherExpense: number;
+  expenseNote: string;
+  date: string;
+}
+
+export const expensesApi = {
+  async list(): Promise<BackendExpense[] | { error: string }> {
+    const result = await authRequest<BackendExpense[]>('/expenses', { method: 'GET' });
+    if (result.error || result.data === undefined) {
+      return { error: result.error || 'Failed to load expenses' };
+    }
+    return result.data;
+  },
+
+  async create(payload: {
+    tripId: string;
+    fuelAmount?: number;
+    fuelCost?: number;
+    otherExpense?: number;
+    expenseNote?: string;
+    date: string;
+  }): Promise<BackendExpense | { error: string }> {
+    const result = await authRequest<BackendExpense>('/expenses', {
+      method: 'POST',
+      body: payload,
+    });
+    if (result.error || !result.data) {
+      return { error: result.error || 'Failed to create expense' };
+    }
+    return result.data;
+  },
+
+  async remove(id: string): Promise<{ message: string; id: string } | { error: string }> {
+    const result = await authRequest<{ message: string; id: string }>(`/expenses/${id}`, {
+      method: 'DELETE',
+    });
+    if (result.error || !result.data) {
+      return { error: result.error || 'Failed to delete expense' };
     }
     return result.data;
   },
