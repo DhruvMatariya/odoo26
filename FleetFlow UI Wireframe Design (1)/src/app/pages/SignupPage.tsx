@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { User, Mail, Lock, Building2, ChevronDown, Eye, EyeOff, AlertCircle, Check, Truck, ArrowLeft } from 'lucide-react';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { CursorFollower } from '../components/auth/CursorFollower';
+import { authApi } from '../services/api';
 
 const SIGNUP_CSS = `
   @keyframes fadeInUpSignup {
@@ -340,13 +341,33 @@ export function SignupPage() {
   };
 
   const handleSubmit = async () => {
-    if (otp.join('').length < 6) {
+    const accessCode = otp.join('').trim();
+    if (accessCode.length !== 6) {
       setErrors({ otp: 'Enter all 6 digits of the access code.' });
       return;
     }
+    const roleLower = role === 'Fleet Manager' ? 'manager' : 'dispatcher';
+    if (roleLower === 'dispatcher' && !accessCode) {
+      setErrors({ otp: 'Access code is required for Dispatchers.' });
+      return;
+    }
     setIsSubmitting(true);
-    await new Promise(r => setTimeout(r, 1200));
+    setErrors({});
+    const result = await authApi.signup({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      role: roleLower as 'manager' | 'dispatcher',
+      ...(roleLower === 'manager' && { organisationName: fleet.trim() || 'My Organisation' }),
+      ...(roleLower === 'dispatcher' && { accessCode }),
+    });
+    if ('error' in result) {
+      setErrors({ otp: result.error || 'Signup failed. Try again.' });
+      setIsSubmitting(false);
+      return;
+    }
     navigate('/login?registered=true');
+    setIsSubmitting(false);
   };
 
   const STEPS = [

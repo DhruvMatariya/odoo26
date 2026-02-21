@@ -13,6 +13,7 @@ function verifyToken(req, res, next) {
       userId: decoded.userId,
       role: decoded.role,
       access_code: decoded.access_code,
+      organisation_id: decoded.organisation_id,
     };
     next();
   } catch (err) {

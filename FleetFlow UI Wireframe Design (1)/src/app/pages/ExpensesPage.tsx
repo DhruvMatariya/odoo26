@@ -1,14 +1,28 @@
 import React, { useState } from 'react';
-import { Plus, Search, Download, DollarSign } from 'lucide-react';
-import { useApp, Expense } from '../context/AppContext';
+import { Plus, Search, Download, Fuel, DollarSign, TrendingUp } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 import { Modal, FormField, inputCls, selectCls } from '../components/Modal';
 
+const DARK_CSS = `
+  .ff-pg-card { background:#0D1017; border:1px solid #1E2330; border-radius:12px; }
+  .ff-pg-table { width:100%; border-collapse:collapse; }
+  .ff-pg-thead tr { background:#0A0C10; border-bottom:1px solid #1E2330; }
+  .ff-pg-th { padding:11px 20px; text-align:left; font-family:'Poppins',sans-serif; font-size:10px; font-weight:600; color:#334155; text-transform:uppercase; letter-spacing:.08em; white-space:nowrap; }
+  .ff-pg-tbody tr { border-bottom:1px solid #111318; transition:background 140ms; }
+  .ff-pg-tbody tr:last-child { border-bottom:none; }
+  .ff-pg-tbody tr:hover { background:rgba(30,42,62,.35); }
+  .ff-pg-td { padding:13px 20px; font-family:'Poppins',sans-serif; font-size:13px; color:#94A3B8; }
+  .ff-pg-search { background:#0A0C10; border:1px solid #1E2330; border-radius:10px; color:#F1F5F9; font-family:'Poppins',sans-serif; font-size:13px; padding:9px 14px 9px 36px; outline:none; width:100%; transition:border-color 200ms,box-shadow 200ms; }
+  .ff-pg-search::placeholder { color:#334155; }
+  .ff-pg-search:focus { border-color:rgba(59,130,246,.45); box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+  .ff-pg-btn-primary { display:flex; align-items:center; gap:6px; padding:9px 16px; background:#3B82F6; border:none; border-radius:8px; color:#fff; font-family:'Poppins',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:background 180ms,box-shadow 180ms; white-space:nowrap; }
+  .ff-pg-btn-primary:hover { background:#2563EB; box-shadow:0 4px 16px rgba(59,130,246,.35); }
+  .ff-pg-btn-ghost { display:flex; align-items:center; gap:6px; padding:9px 14px; background:transparent; border:1px solid #1E2330; border-radius:8px; color:#64748B; font-family:'Poppins',sans-serif; font-size:12px; font-weight:500; cursor:pointer; transition:border-color 160ms,color 160ms; }
+  .ff-pg-btn-ghost:hover { border-color:#334155; color:#94A3B8; }
+`;
+
 const EMPTY_FORM = {
-  tripId: '',
-  fuelAmount: '',
-  fuelCost: '',
-  otherExpense: '',
-  expenseNote: '',
+  tripId: '', fuelAmount: '', fuelCost: '', otherExpense: '', expenseNote: '',
   date: new Date().toISOString().split('T')[0],
 };
 
@@ -20,28 +34,17 @@ export function ExpensesPage() {
   const [error, setError] = useState('');
 
   const completedTrips = trips.filter(t => t.status === 'Completed' || t.status === 'Dispatched');
-
-  const filtered = expenses.filter(e => {
-    const matchSearch = e.id.toLowerCase().includes(search.toLowerCase()) ||
-      e.tripId.toLowerCase().includes(search.toLowerCase()) ||
-      e.expenseNote.toLowerCase().includes(search.toLowerCase());
-    return matchSearch;
-  });
+  const filtered = expenses.filter(e =>
+    e.id.toLowerCase().includes(search.toLowerCase()) ||
+    e.tripId.toLowerCase().includes(search.toLowerCase()) ||
+    e.expenseNote.toLowerCase().includes(search.toLowerCase())
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.tripId || !form.date) { setError('Please select a trip and date.'); return; }
-    addExpense({
-      tripId: form.tripId,
-      fuelAmount: Number(form.fuelAmount) || 0,
-      fuelCost: Number(form.fuelCost) || 0,
-      otherExpense: Number(form.otherExpense) || 0,
-      expenseNote: form.expenseNote,
-      date: form.date,
-    });
-    setForm(EMPTY_FORM);
-    setShowModal(false);
-    setError('');
+    addExpense({ tripId: form.tripId, fuelAmount: Number(form.fuelAmount) || 0, fuelCost: Number(form.fuelCost) || 0, otherExpense: Number(form.otherExpense) || 0, expenseNote: form.expenseNote, date: form.date });
+    setForm(EMPTY_FORM); setShowModal(false); setError('');
   };
 
   const field = (key: keyof typeof form, value: string) => setForm(prev => ({ ...prev, [key]: value }));
@@ -50,143 +53,113 @@ export function ExpensesPage() {
   const totalOther = expenses.reduce((s, e) => s + e.otherExpense, 0);
   const grandTotal = totalFuel + totalOther;
 
+  const summaryCards = [
+    { label: 'Total Fuel Cost', value: `KES ${totalFuel.toLocaleString()}`, sub: `${expenses.reduce((s, e) => s + e.fuelAmount, 0).toLocaleString()} liters total`, icon: Fuel, accent: 'rgba(59,130,246,0.1)', iconColor: '#3B82F6' },
+    { label: 'Other Expenses', value: `KES ${totalOther.toLocaleString()}`, sub: 'Tolls, parking, misc.', icon: DollarSign, accent: 'rgba(245,158,11,0.1)', iconColor: '#F59E0B' },
+    { label: 'Total Operational', value: `KES ${grandTotal.toLocaleString()}`, sub: 'Fuel + all other expenses', icon: TrendingUp, accent: 'rgba(16,185,129,0.1)', iconColor: '#10B981' },
+  ];
+
   return (
-    <div className="space-y-5">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <style>{DARK_CSS}</style>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Expense & Fuel Tracking</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Financial tracking per trip and asset — {expenses.length} entries</p>
+          <h1 style={{ fontFamily: "'Poppins',sans-serif", fontSize: 20, fontWeight: 700, color: '#F1F5F9', margin: 0 }}>Expense & Fuel Tracking</h1>
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#64748B', margin: '3px 0 0' }}>
+            Financial tracking per trip and asset — {expenses.length} entries
+          </p>
         </div>
-        <div className="flex gap-2">
-          <button className="flex items-center gap-2 border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
-            <Download size={15} />
-            Export CSV
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={16} />
-            Add Expense
-          </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="ff-pg-btn-ghost"><Download size={14} /> Export CSV</button>
+          <button className="ff-pg-btn-primary" onClick={() => setShowModal(true)}><Plus size={15} /> Add Expense</button>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
-              <DollarSign size={17} className="text-blue-600" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+        {summaryCards.map(card => (
+          <div key={card.label} className="ff-pg-card" style={{ padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 9, background: card.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <card.icon size={16} style={{ color: card.iconColor }} />
+              </div>
+              <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#64748B', margin: 0 }}>{card.label}</p>
             </div>
-            <p className="text-sm text-gray-500">Total Fuel Cost</p>
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 22, fontWeight: 700, color: '#F1F5F9', margin: '0 0 3px' }}>{card.value}</p>
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, color: '#334155', margin: 0 }}>{card.sub}</p>
           </div>
-          <p className="text-2xl font-semibold text-gray-900">KES {totalFuel.toLocaleString()}</p>
-          <p className="text-xs text-gray-400 mt-1">
-            {expenses.reduce((s, e) => s + e.fuelAmount, 0).toLocaleString()} liters total
-          </p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center">
-              <DollarSign size={17} className="text-amber-600" />
-            </div>
-            <p className="text-sm text-gray-500">Other Expenses</p>
-          </div>
-          <p className="text-2xl font-semibold text-gray-900">KES {totalOther.toLocaleString()}</p>
-          <p className="text-xs text-gray-400 mt-1">Tolls, parking, misc.</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center">
-              <DollarSign size={17} className="text-green-600" />
-            </div>
-            <p className="text-sm text-gray-500">Total Operational Cost</p>
-          </div>
-          <p className="text-2xl font-semibold text-gray-900">KES {grandTotal.toLocaleString()}</p>
-          <p className="text-xs text-gray-400 mt-1">Fuel + all other expenses</p>
-        </div>
+        ))}
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by entry ID, trip, note..."
-          className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div style={{ position: 'relative', maxWidth: 340 }}>
+        <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#334155', pointerEvents: 'none' }} />
+        <input className="ff-pg-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by entry ID, trip, note..." />
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+      <div className="ff-pg-card" style={{ overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="ff-pg-table">
+            <thead className="ff-pg-thead">
+              <tr>
                 {['Entry ID', 'Trip ID', 'Driver', 'Vehicle', 'Fuel (L)', 'Fuel Cost', 'Other Expense', 'Note', 'Total Cost', 'Date'].map(col => (
-                  <th key={col} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                    {col}
-                  </th>
+                  <th key={col} className="ff-pg-th">{col}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="ff-pg-tbody">
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-5 py-12 text-center text-sm text-gray-400">No expense entries found.</td></tr>
+                <tr><td colSpan={10} style={{ padding: '48px 20px', textAlign: 'center', fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#334155' }}>No expense entries found.</td></tr>
               ) : filtered.map(entry => {
                 const trip = trips.find(t => t.id === entry.tripId);
                 const vehicle = trip ? getVehicleById(trip.vehicleId) : undefined;
                 const driver = trip ? getDriverById(trip.driverId) : undefined;
                 const total = entry.fuelCost + entry.otherExpense;
                 return (
-                  <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3.5 text-sm font-medium text-blue-600">{entry.id}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-700 font-medium">{entry.tripId}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{driver?.name ?? '—'}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{vehicle?.model ?? '—'}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-700">{entry.fuelAmount} L</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-700">KES {entry.fuelCost.toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-700">KES {entry.otherExpense.toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-500 max-w-xs truncate">{entry.expenseNote || '—'}</td>
-                    <td className="px-5 py-3.5 text-sm font-semibold text-gray-900">KES {total.toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-500 whitespace-nowrap">{entry.date}</td>
+                  <tr key={entry.id}>
+                    <td className="ff-pg-td" style={{ color: '#3B82F6', fontWeight: 600 }}>{entry.id}</td>
+                    <td className="ff-pg-td" style={{ color: '#F1F5F9', fontWeight: 500 }}>{entry.tripId}</td>
+                    <td className="ff-pg-td">{driver?.name ?? '—'}</td>
+                    <td className="ff-pg-td">{vehicle?.model ?? '—'}</td>
+                    <td className="ff-pg-td">{entry.fuelAmount} L</td>
+                    <td className="ff-pg-td">KES {entry.fuelCost.toLocaleString()}</td>
+                    <td className="ff-pg-td">KES {entry.otherExpense.toLocaleString()}</td>
+                    <td className="ff-pg-td" style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#64748B' }}>{entry.expenseNote || '—'}</td>
+                    <td className="ff-pg-td" style={{ color: '#F1F5F9', fontWeight: 600 }}>KES {total.toLocaleString()}</td>
+                    <td className="ff-pg-td" style={{ color: '#64748B', whiteSpace: 'nowrap' }}>{entry.date}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-          <p className="text-sm text-gray-500">Showing {filtered.length} of {expenses.length} entries</p>
-          <p className="text-sm font-medium text-gray-900">
-            Visible total: KES {filtered.reduce((s, e) => s + e.fuelCost + e.otherExpense, 0).toLocaleString()}
+        <div style={{ padding: '10px 20px', borderTop: '1px solid #111318', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#334155', margin: 0 }}>
+            Showing {filtered.length} of {expenses.length} entries
+          </p>
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#64748B', margin: 0, fontWeight: 600 }}>
+            Visible: KES {filtered.reduce((s, e) => s + e.fuelCost + e.otherExpense, 0).toLocaleString()}
           </p>
         </div>
       </div>
 
-      {/* Add Expense Modal */}
+      {/* Modal */}
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}
         title="Add Expense Entry" subtitle="Record fuel and operational costs for a trip">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <FormField label="Trip" required>
             <select value={form.tripId} onChange={e => field('tripId', e.target.value)} className={selectCls}>
               <option value="">— Select trip —</option>
               {completedTrips.map(t => {
-                const v = getVehicleById(t.vehicleId);
                 const d = getDriverById(t.driverId);
-                return (
-                  <option key={t.id} value={t.id}>
-                    {t.id} — {t.origin} → {t.destination} ({d?.name ?? '?'})
-                  </option>
-                );
+                return <option key={t.id} value={t.id}>{t.id} — {t.origin} → {t.destination} ({d?.name ?? '?'})</option>;
               })}
             </select>
           </FormField>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <FormField label="Fuel Amount (Liters)">
               <input type="number" value={form.fuelAmount} onChange={e => field('fuelAmount', e.target.value)} placeholder="e.g. 80" className={inputCls} />
             </FormField>
@@ -194,8 +167,7 @@ export function ExpensesPage() {
               <input type="number" value={form.fuelCost} onChange={e => field('fuelCost', e.target.value)} placeholder="e.g. 12000" className={inputCls} />
             </FormField>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <FormField label="Other Expense (KES)">
               <input type="number" value={form.otherExpense} onChange={e => field('otherExpense', e.target.value)} placeholder="Tolls, parking, etc." className={inputCls} />
             </FormField>
@@ -203,31 +175,24 @@ export function ExpensesPage() {
               <input type="date" value={form.date} onChange={e => field('date', e.target.value)} className={inputCls} />
             </FormField>
           </div>
-
           <FormField label="Expense Note">
-            <input value={form.expenseNote} onChange={e => field('expenseNote', e.target.value)} placeholder="Brief description of other expenses..." className={inputCls} />
+            <input value={form.expenseNote} onChange={e => field('expenseNote', e.target.value)} placeholder="Brief description..." className={inputCls} />
           </FormField>
-
-          {/* Calculated total preview */}
           {(form.fuelCost || form.otherExpense) && (
-            <div className="bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
-              <p className="text-xs text-gray-500 mb-1">Calculated Total</p>
-              <p className="text-base font-semibold text-gray-900">
+            <div style={{ background: '#0A0C10', border: '1px solid #1E2330', borderRadius: 8, padding: '12px 14px' }}>
+              <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, color: '#64748B', margin: '0 0 3px' }}>Calculated Total</p>
+              <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 16, fontWeight: 700, color: '#F1F5F9', margin: 0 }}>
                 KES {((Number(form.fuelCost) || 0) + (Number(form.otherExpense) || 0)).toLocaleString()}
               </p>
             </div>
           )}
-
-          {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-
-          <div className="flex gap-3 pt-1">
-            <button type="submit" className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-              Save Entry
-            </button>
-            <button type="button" onClick={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}
-              className="flex-1 bg-gray-100 text-gray-700 py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
-              Cancel
-            </button>
+          {error && (
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#EF4444', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 8, padding: '10px 14px', margin: 0 }}>{error}</p>
+          )}
+          <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+            <button type="submit" className="ff-pg-btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Save Entry</button>
+            <button type="button" className="ff-pg-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}
+              onClick={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}>Cancel</button>
           </div>
         </form>
       </Modal>

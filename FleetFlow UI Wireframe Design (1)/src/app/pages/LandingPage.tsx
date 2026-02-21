@@ -43,7 +43,7 @@ const LANDING_CSS = `
     border: none;
     border-radius: 10px;
     color: #fff;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;
@@ -68,7 +68,7 @@ const LANDING_CSS = `
     border: 1px solid #1E2330;
     border-radius: 10px;
     color: #64748B;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 15px;
     font-weight: 500;
     cursor: pointer;
@@ -166,11 +166,11 @@ export function LandingPage() {
           <Truck size={20} style={{ color: '#3B82F6' }} />
         </div>
         <span style={{
-          fontFamily: '"DM Mono", monospace',
-          fontWeight: 500,
+          fontFamily: "'Poppins', sans-serif",
+          fontWeight: 700,
           fontSize: 18,
           color: '#F1F5F9',
-          letterSpacing: '0.02em',
+          letterSpacing: '-0.01em',
         }}>
           FleetFlow
         </span>
@@ -210,11 +210,12 @@ export function LandingPage() {
             flexShrink: 0,
           }} />
           <span style={{
-            fontFamily: '"DM Mono", monospace',
+            fontFamily: "'Poppins', sans-serif",
             fontSize: 11,
             color: '#64748B',
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
+            fontWeight: 500,
           }}>
             Fleet Intelligence Platform
           </span>
@@ -231,7 +232,7 @@ export function LandingPage() {
 
         {/* Hint */}
         <div className="ld-a3 ld-hint" style={{
-          fontFamily: '"DM Mono", monospace',
+          fontFamily: "'Poppins', sans-serif",
           fontSize: 11,
           color: '#334155',
           letterSpacing: '0.1em',
@@ -258,9 +259,9 @@ export function LandingPage() {
             <React.Fragment key={stat.label}>
               <div className="ld-stat-card">
                 <div style={{
-                  fontFamily: '"DM Mono", monospace',
+                  fontFamily: "'Poppins', sans-serif",
                   fontSize: 'clamp(28px, 4vw, 38px)',
-                  fontWeight: 500,
+                  fontWeight: 700,
                   color: '#F1F5F9',
                   lineHeight: 1,
                   letterSpacing: '-0.02em',
@@ -280,7 +281,7 @@ export function LandingPage() {
                   </span>
                 </div>
                 <div style={{
-                  fontFamily: '"Sora", sans-serif',
+                  fontFamily: "'Poppins', sans-serif",
                   fontSize: 11,
                   fontWeight: 600,
                   color: '#3B82F6',
@@ -291,7 +292,7 @@ export function LandingPage() {
                   {stat.label}
                 </div>
                 <div style={{
-                  fontFamily: '"Sora", sans-serif',
+                  fontFamily: "'Poppins', sans-serif",
                   fontSize: 11,
                   color: '#334155',
                   marginTop: 2,
@@ -325,7 +326,7 @@ export function LandingPage() {
         {/* Bottom micro-text */}
         <div className="ld-a6" style={{
           marginTop: 28,
-          fontFamily: '"DM Mono", monospace',
+          fontFamily: "'Poppins', sans-serif",
           fontSize: 10,
           color: '#1E2330',
           letterSpacing: '0.1em',

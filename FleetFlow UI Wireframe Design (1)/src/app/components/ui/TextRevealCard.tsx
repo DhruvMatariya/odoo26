@@ -30,7 +30,7 @@ export function TextRevealCard({
   }, []);
 
   const textStyle: React.CSSProperties = {
-    fontFamily: '"Sora", sans-serif',
+    fontFamily: "'Poppins', sans-serif",
     fontSize,
     fontWeight: 800,
     letterSpacing: '-0.035em',
@@ -95,7 +95,7 @@ export function TextRevealCard({
 export function TextRevealCardTitle({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontFamily: '"DM Mono", monospace',
+      fontFamily: "'Poppins', sans-serif",
       fontSize: 11,
       fontWeight: 500,
       color: '#3B82F6',
@@ -111,7 +111,7 @@ export function TextRevealCardTitle({ children }: { children: React.ReactNode })
 export function TextRevealCardDescription({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontFamily: '"Sora", sans-serif',
+      fontFamily: "'Poppins', sans-serif",
       fontSize: 14,
       color: '#334155',
       lineHeight: 1.65,

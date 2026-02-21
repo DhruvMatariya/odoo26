@@ -5,35 +5,59 @@ interface StatusPillProps {
   size?: 'sm' | 'md';
 }
 
-const STATUS_CONFIG: Record<string, { bg: string; text: string; dot: string }> = {
+// Dark-palette status configuration
+const STATUS_CONFIG: Record<string, { bg: string; color: string; dot: string; border: string }> = {
   // Vehicle
-  'Available':    { bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500' },
-  'On Trip':      { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500' },
-  'In Shop':      { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
-  'Retired':      { bg: 'bg-gray-100',  text: 'text-gray-500',   dot: 'bg-gray-400' },
+  'Available':   { bg: 'rgba(16,185,129,0.1)',  color: '#10B981', dot: '#10B981', border: 'rgba(16,185,129,0.25)'  },
+  'On Trip':     { bg: 'rgba(59,130,246,0.1)',   color: '#3B82F6', dot: '#3B82F6', border: 'rgba(59,130,246,0.25)'  },
+  'In Shop':     { bg: 'rgba(245,158,11,0.1)',   color: '#F59E0B', dot: '#F59E0B', border: 'rgba(245,158,11,0.25)'  },
+  'Retired':     { bg: 'rgba(255,255,255,0.05)', color: '#64748B', dot: '#334155', border: 'rgba(255,255,255,0.08)' },
   // Driver
-  'On Duty':      { bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500' },
-  'Off Duty':     { bg: 'bg-gray-100',  text: 'text-gray-500',   dot: 'bg-gray-400' },
-  'Suspended':    { bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-500' },
+  'On Duty':     { bg: 'rgba(16,185,129,0.1)',   color: '#10B981', dot: '#10B981', border: 'rgba(16,185,129,0.25)'  },
+  'Off Duty':    { bg: 'rgba(255,255,255,0.05)', color: '#64748B', dot: '#334155', border: 'rgba(255,255,255,0.08)' },
+  'Suspended':   { bg: 'rgba(239,68,68,0.1)',    color: '#EF4444', dot: '#EF4444', border: 'rgba(239,68,68,0.25)'   },
   // Trip
-  'Draft':        { bg: 'bg-gray-100',  text: 'text-gray-500',   dot: 'bg-gray-400' },
-  'Dispatched':   { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500' },
-  'Completed':    { bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500' },
-  'Cancelled':    { bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-500' },
+  'Draft':       { bg: 'rgba(255,255,255,0.05)', color: '#64748B', dot: '#334155', border: 'rgba(255,255,255,0.08)' },
+  'Dispatched':  { bg: 'rgba(59,130,246,0.1)',   color: '#3B82F6', dot: '#3B82F6', border: 'rgba(59,130,246,0.25)'  },
+  'Completed':   { bg: 'rgba(16,185,129,0.1)',   color: '#10B981', dot: '#10B981', border: 'rgba(16,185,129,0.25)'  },
+  'Cancelled':   { bg: 'rgba(239,68,68,0.1)',    color: '#EF4444', dot: '#EF4444', border: 'rgba(239,68,68,0.25)'   },
   // Maintenance
-  'Scheduled':    { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
-  'In Progress':  { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500' },
+  'Scheduled':   { bg: 'rgba(245,158,11,0.1)',   color: '#F59E0B', dot: '#F59E0B', border: 'rgba(245,158,11,0.25)'  },
+  'In Progress': { bg: 'rgba(59,130,246,0.1)',   color: '#3B82F6', dot: '#3B82F6', border: 'rgba(59,130,246,0.25)'  },
   // License
-  'Valid':        { bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500' },
-  'Expired':      { bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-500' },
+  'Valid':       { bg: 'rgba(16,185,129,0.1)',   color: '#10B981', dot: '#10B981', border: 'rgba(16,185,129,0.25)'  },
+  'Expired':     { bg: 'rgba(239,68,68,0.1)',    color: '#EF4444', dot: '#EF4444', border: 'rgba(239,68,68,0.25)'   },
 };
 
 export function StatusPill({ status, size = 'sm' }: StatusPillProps) {
-  const config = STATUS_CONFIG[status] ?? { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400' };
-  const padding = size === 'md' ? 'px-3 py-1.5' : 'px-2.5 py-1';
+  const cfg = STATUS_CONFIG[status] ?? {
+    bg: 'rgba(255,255,255,0.05)', color: '#64748B', dot: '#334155', border: 'rgba(255,255,255,0.08)',
+  };
+
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full text-xs font-medium ${padding} ${config.bg} ${config.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${config.dot}`} />
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 5,
+      padding: size === 'md' ? '5px 12px' : '3px 10px',
+      borderRadius: 100,
+      background: cfg.bg,
+      border: `1px solid ${cfg.border}`,
+      fontFamily: "'Poppins', sans-serif",
+      fontSize: size === 'md' ? 12 : 11,
+      fontWeight: 600,
+      color: cfg.color,
+      whiteSpace: 'nowrap',
+      letterSpacing: '0.02em',
+    }}>
+      <span style={{
+        width: 5,
+        height: 5,
+        borderRadius: '50%',
+        background: cfg.dot,
+        flexShrink: 0,
+        boxShadow: `0 0 4px ${cfg.dot}99`,
+      }} />
       {status}
     </span>
   );

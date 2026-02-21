@@ -133,16 +133,31 @@ async function login(req, res) {
       return res.status(401).json({ error: "Invalid credentials" });
 
     const orgResult = await pool.query(
-      "SELECT access_code FROM organisations WHERE user_id=$1 LIMIT 1",
+      "SELECT id, access_code FROM organisations WHERE user_id=$1 LIMIT 1",
       [user.id]
     );
 
-    const access_code = orgResult.rows[0]?.access_code;
+    const userOrg = orgResult.rows[0];
+    const access_code = userOrg?.access_code;
+
+    // Resolve canonical organisation_id (the manager's org row) so that
+    // all users who share the same access_code see the same vehicles.
+    let organisation_id = userOrg?.id;
+    if (access_code) {
+      const managerOrg = await pool.query(
+        "SELECT id FROM organisations WHERE access_code=$1 AND role='manager' LIMIT 1",
+        [access_code]
+      );
+      if (managerOrg.rows.length) {
+        organisation_id = managerOrg.rows[0].id;
+      }
+    }
 
     const token = signToken({
       userId: user.id,
       role: user.role,
       access_code,
+      organisation_id,
     });
 
     return res.json({

@@ -24,9 +24,15 @@ if (!envLoaded) {
 }
 
 const express = require('express');
+const cors = require('cors');
 const authRoutes = require('./routes/auth.routes');
+const vehicleRoutes = require('./routes/vehicle.routes');
+const driverRoutes = require('./routes/driver.routes');
+const tripRoutes = require('./routes/trip.routes');
+const maintenanceRoutes = require('./routes/maintenance.routes');
 
 const app = express();
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 // ✅ Debug ENV
@@ -52,37 +58,45 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Routes - make sure prefix is /auth
+// Routes
 app.use('/auth', authRoutes);
+app.use('/vehicles', vehicleRoutes);
+app.use('/drivers', driverRoutes);
+app.use('/trips', tripRoutes);
+app.use('/maintenance', maintenanceRoutes);
 
-// ✅ Debug - List all registered routes
-app.use((req, res, next) => {
-  console.log(`📍 ${req.method} ${req.url}`);
-  next();
+app.get('/ping', (req, res) => {
+  res.json({
+    message: '✅ Server is running',
+    routes: [
+      'POST /auth/signup',
+      'POST /auth/login',
+      'GET /vehicles',
+      'POST /vehicles',
+      'PATCH /vehicles/:id/status',
+      'GET /drivers',
+      'POST /drivers',
+      'PATCH /drivers/:id/status',
+      'GET /trips',
+      'POST /trips',
+      'PATCH /trips/:id/status',
+      'GET /maintenance',
+      'POST /maintenance',
+      'PATCH /maintenance/:id/status',
+    ],
+  });
 });
 
-// ✅ 404 Handler
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// ✅ Global Error Handler
+// Global Error Handler
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
-
-app.get('/ping', (req, res) => {
-  res.json({ 
-    message: '✅ Server is running',
-    routes: [
-      'POST /auth/signup',
-      'POST /auth/login'
-    ]
-  });
-});
-
-app.use('/auth', authRoutes);
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;

@@ -1,200 +1,227 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, ShieldAlert, Clock, Users } from 'lucide-react';
+import { Plus, Search, ShieldCheck, ShieldAlert, Clock, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { StatusPill } from '../components/StatusPill';
+import { Modal, FormField, inputCls } from '../components/Modal';
 
-function isLicenseExpired(expiry: string) {
-  return new Date(expiry) < new Date();
+const DARK_CSS = `
+  .ff-pg-card { background:#0D1017; border:1px solid #1E2330; border-radius:12px; }
+  .ff-pg-table { width:100%; border-collapse:collapse; }
+  .ff-pg-thead tr { background:#0A0C10; border-bottom:1px solid #1E2330; }
+  .ff-pg-th { padding:11px 20px; text-align:left; font-family:'Poppins',sans-serif; font-size:10px; font-weight:600; color:#334155; text-transform:uppercase; letter-spacing:.08em; white-space:nowrap; }
+  .ff-pg-tbody tr { border-bottom:1px solid #111318; transition:background 140ms; }
+  .ff-pg-tbody tr:last-child { border-bottom:none; }
+  .ff-pg-tbody tr:hover { background:rgba(30,42,62,.35); }
+  .ff-pg-td { padding:13px 20px; font-family:'Poppins',sans-serif; font-size:13px; color:#94A3B8; }
+  .ff-pg-search { background:#0A0C10; border:1px solid #1E2330; border-radius:10px; color:#F1F5F9; font-family:'Poppins',sans-serif; font-size:13px; padding:9px 14px 9px 36px; outline:none; width:100%; transition:border-color 200ms,box-shadow 200ms; }
+  .ff-pg-search::placeholder { color:#334155; }
+  .ff-pg-search:focus { border-color:rgba(59,130,246,.45); box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+  .ff-pg-tabs { display:flex; gap:3px; background:#0D1017; border:1px solid #1E2330; border-radius:10px; padding:4px; flex-wrap:wrap; }
+  .ff-pg-tab { padding:6px 14px; border-radius:7px; font-family:'Poppins',sans-serif; font-size:12px; font-weight:500; color:#64748B; cursor:pointer; background:transparent; border:1px solid transparent; transition:all 160ms; white-space:nowrap; }
+  .ff-pg-tab.active { background:#1E2A3E; color:#3B82F6; border-color:rgba(59,130,246,.25); }
+  .ff-pg-tab:not(.active):hover { color:#94A3B8; }
+  .ff-pg-row-action { font-family:'Poppins',sans-serif; font-size:11px; font-weight:500; padding:4px 10px; border-radius:6px; cursor:pointer; border:none; transition:background 150ms,color 150ms; }
+  .ff-pg-btn-primary { display:flex; align-items:center; gap:6px; padding:9px 16px; background:#3B82F6; border:none; border-radius:8px; color:#fff; font-family:'Poppins',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:background 180ms,box-shadow 180ms; white-space:nowrap; }
+  .ff-pg-btn-primary:hover { background:#2563EB; box-shadow:0 4px 16px rgba(59,130,246,.35); }
+  .ff-pg-btn-ghost { display:flex; align-items:center; gap:6px; padding:9px 14px; background:transparent; border:1px solid #1E2330; border-radius:8px; color:#64748B; font-family:'Poppins',sans-serif; font-size:12px; font-weight:500; cursor:pointer; transition:border-color 160ms,color 160ms; }
+  .ff-pg-btn-ghost:hover { border-color:#334155; color:#94A3B8; }
+  .ff-badge { display:inline-block; font-family:'Poppins',sans-serif; font-size:11px; font-weight:500; padding:3px 9px; border-radius:6px; background:rgba(255,255,255,.05); color:#64748B; border:1px solid #1A2030; }
+  .ff-score-track { height:5px; background:#1E2330; border-radius:3px; overflow:hidden; width:72px; }
+  .ff-score-bar { height:100%; border-radius:3px; transition:width .4s ease; }
+`;
+
+function isExpired(expiry: string) { return expiry && new Date(expiry) < new Date(); }
+function isExpiringSoon(expiry: string) {
+  if (!expiry) return false;
+  const diff = new Date(expiry).getTime() - Date.now();
+  return diff > 0 && diff < 90 * 86400000;
 }
 
-function isLicenseSoonExpiring(expiry: string) {
-  const diff = new Date(expiry).getTime() - new Date().getTime();
-  return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000; // 90 days
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const color = score >= 90 ? 'bg-green-500' : score >= 75 ? 'bg-amber-500' : 'bg-red-500';
-  return (
-    <div className="flex items-center gap-2">
-      <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${score}%` }} />
-      </div>
-      <span className="text-sm text-gray-700 font-medium">{score}</span>
-    </div>
-  );
-}
+const EMPTY_FORM = {
+  name: '',
+  phone: '',
+  licenseNumber: '',
+  licenseExpiry: '',
+};
 
 export function DriversPage() {
-  const { drivers, trips, updateDriverStatus } = useApp();
+  const { drivers, trips, updateDriverStatus, addDriver } = useApp();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const filtered = drivers.filter(d => {
-    const matchSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
+    const ms = d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.license.toLowerCase().includes(search.toLowerCase()) ||
       d.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'All' || d.status === filterStatus;
-    return matchSearch && matchStatus;
+    return ms && (filterStatus === 'All' || d.status === filterStatus);
   });
 
-  const expiredCount = drivers.filter(d => isLicenseExpired(d.licenseExpiry)).length;
-  const expiringSoon = drivers.filter(d => isLicenseSoonExpiring(d.licenseExpiry)).length;
+  const expiredCount = drivers.filter(d => d.licenseExpiry && isExpired(d.licenseExpiry)).length;
+  const expiringSoon = drivers.filter(d => d.licenseExpiry && isExpiringSoon(d.licenseExpiry)).length;
   const onDuty = drivers.filter(d => d.status === 'On Duty').length;
-  const avgScore = Math.round(drivers.reduce((s, d) => s + d.safetyScore, 0) / drivers.length);
+  const avgScore = drivers.length > 0 ? Math.round(drivers.reduce((s, d) => s + d.safetyScore, 0) / drivers.length) : 0;
+
+  const summaryCards = [
+    { label: 'Total Drivers', value: drivers.length, sub: `${onDuty} currently on duty`, Icon: Users, color: '#3B82F6', accent: 'rgba(59,130,246,0.1)', alert: false },
+    { label: 'Avg Safety Score', value: avgScore, sub: 'Out of 100', Icon: ShieldCheck, color: '#10B981', accent: 'rgba(16,185,129,0.1)', alert: false },
+    { label: 'Expired Licenses', value: expiredCount, sub: 'Blocked from assignment', Icon: ShieldAlert, color: expiredCount > 0 ? '#EF4444' : '#334155', accent: expiredCount > 0 ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.04)', alert: expiredCount > 0 },
+    { label: 'Expiring Soon', value: expiringSoon, sub: 'Within 90 days', Icon: Clock, color: expiringSoon > 0 ? '#F59E0B' : '#334155', accent: expiringSoon > 0 ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.04)', alert: expiringSoon > 0 },
+  ];
+
+  const field = (key: keyof typeof form, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name || !form.phone || !form.licenseNumber) {
+      setError('Please fill all required fields.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    const result = await addDriver({
+      name: form.name,
+      phone: form.phone,
+      licenseNumber: form.licenseNumber,
+      licenseExpiry: form.licenseExpiry || undefined,
+    });
+    setSubmitting(false);
+    if (!result.success) {
+      setError(result.error || 'Failed to add driver.');
+      return;
+    }
+    setForm(EMPTY_FORM);
+    setShowModal(false);
+    toast.success('Driver added successfully.');
+  };
+
+  const handleStatusChange = async (driverId: string, newStatus: 'On Duty' | 'Off Duty' | 'Suspended') => {
+    const result = await updateDriverStatus(driverId, newStatus);
+    if (result.success) {
+      toast.success(`Driver status updated to ${newStatus}.`);
+    } else {
+      toast.error(result.error || 'Failed to update status.');
+    }
+  };
 
   return (
-    <div className="space-y-5">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <style>{DARK_CSS}</style>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Driver Performance & Safety</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Compliance monitoring and performance profiles — {drivers.length} drivers</p>
+          <h1 style={{ fontFamily: "'Poppins',sans-serif", fontSize: 20, fontWeight: 700, color: '#F1F5F9', margin: 0 }}>Driver Performance & Safety</h1>
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#64748B', margin: '3px 0 0' }}>
+            Compliance monitoring and performance profiles — {drivers.length} drivers
+          </p>
         </div>
+        <button className="ff-pg-btn-primary" onClick={() => setShowModal(true)}>
+          <Plus size={15} /> Add Driver
+        </button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Users size={16} className="text-blue-500" />
-            <p className="text-sm text-gray-500">Total Drivers</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
+        {summaryCards.map(card => (
+          <div key={card.label} className="ff-pg-card" style={{ padding: 18, borderColor: card.alert ? `${card.color}33` : '#1E2330' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <card.Icon size={15} style={{ color: card.color }} />
+              <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#64748B', margin: 0 }}>{card.label}</p>
+            </div>
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 26, fontWeight: 700, color: card.color, margin: '0 0 2px' }}>{card.value}</p>
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, color: '#334155', margin: 0 }}>{card.sub}</p>
           </div>
-          <p className="text-2xl font-semibold text-gray-900">{drivers.length}</p>
-          <p className="text-xs text-gray-400 mt-1">{onDuty} currently on duty</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldCheck size={16} className="text-green-500" />
-            <p className="text-sm text-gray-500">Avg Safety Score</p>
-          </div>
-          <p className="text-2xl font-semibold text-gray-900">{avgScore}</p>
-          <p className="text-xs text-gray-400 mt-1">Out of 100</p>
-        </div>
-        <div className={`bg-white border rounded-xl p-4 ${expiredCount > 0 ? 'border-red-200' : 'border-gray-200'}`}>
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldAlert size={16} className={expiredCount > 0 ? 'text-red-500' : 'text-gray-400'} />
-            <p className="text-sm text-gray-500">Expired Licenses</p>
-          </div>
-          <p className={`text-2xl font-semibold ${expiredCount > 0 ? 'text-red-600' : 'text-gray-900'}`}>{expiredCount}</p>
-          <p className="text-xs text-gray-400 mt-1">Blocked from assignment</p>
-        </div>
-        <div className={`bg-white border rounded-xl p-4 ${expiringSoon > 0 ? 'border-amber-200' : 'border-gray-200'}`}>
-          <div className="flex items-center gap-2 mb-2">
-            <Clock size={16} className={expiringSoon > 0 ? 'text-amber-500' : 'text-gray-400'} />
-            <p className="text-sm text-gray-500">Expiring Soon</p>
-          </div>
-          <p className={`text-2xl font-semibold ${expiringSoon > 0 ? 'text-amber-600' : 'text-gray-900'}`}>{expiringSoon}</p>
-          <p className="text-xs text-gray-400 mt-1">Within 90 days</p>
-        </div>
+        ))}
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, license, ID..."
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
+          <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#334155', pointerEvents: 'none' }} />
+          <input className="ff-pg-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, license, ID..." />
         </div>
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+        <div className="ff-pg-tabs">
           {['All', 'On Duty', 'Off Duty', 'Suspended'].map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                filterStatus === s ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              {s}
-            </button>
+            <button key={s} className={`ff-pg-tab${filterStatus === s ? ' active' : ''}`} onClick={() => setFilterStatus(s)}>{s}</button>
           ))}
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                {['Driver', 'License No.', 'Category', 'License Expiry', 'Safety Score', 'Trips Done', 'Compliance', 'Status', 'Actions'].map(col => (
-                  <th key={col} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                    {col}
-                  </th>
+      <div className="ff-pg-card" style={{ overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="ff-pg-table">
+            <thead className="ff-pg-thead">
+              <tr>
+                {['Driver', 'Phone', 'License No.', 'License Expiry', 'Safety Score', 'Trips Done', 'Compliance', 'Status', 'Actions'].map(col => (
+                  <th key={col} className="ff-pg-th">{col}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="ff-pg-tbody">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-5 py-12 text-center text-sm text-gray-400">No drivers found.</td></tr>
+                <tr><td colSpan={9} style={{ padding: '48px 20px', textAlign: 'center', fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#334155' }}>No drivers found.</td></tr>
               ) : filtered.map(driver => {
-                const expired = isLicenseExpired(driver.licenseExpiry);
-                const expiring = isLicenseSoonExpiring(driver.licenseExpiry);
-                const driverTrips = trips.filter(t => t.driverId === driver.id);
-                const completionRate = driverTrips.length > 0
-                  ? Math.round((driverTrips.filter(t => t.status === 'Completed').length / driverTrips.length) * 100)
-                  : 0;
+                const expired = isExpired(driver.licenseExpiry);
+                const expiring = isExpiringSoon(driver.licenseExpiry);
+                const scoreColor = driver.safetyScore >= 90 ? '#10B981' : driver.safetyScore >= 75 ? '#F59E0B' : '#EF4444';
 
                 return (
-                  <tr key={driver.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-xs font-semibold flex-shrink-0">
-                          {driver.name.split(' ').map(n => n[0]).join('').slice(0,2)}
+                  <tr key={driver.id}>
+                    <td className="ff-pg-td">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#1E2A3E,#3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 700, color: '#fff' }}>
+                          {driver.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{driver.name}</p>
-                          <p className="text-xs text-gray-400">{driver.id}</p>
+                          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#F1F5F9', fontWeight: 500, margin: 0 }}>{driver.name}</p>
+                          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, color: '#334155', margin: '1px 0 0' }}>{driver.id.slice(0, 8)}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-sm font-mono text-gray-600 text-xs">{driver.license}</td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md font-medium">{driver.category}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm ${expired ? 'text-red-600 font-medium' : expiring ? 'text-amber-600' : 'text-gray-600'}`}>
-                          {driver.licenseExpiry}
+                    <td className="ff-pg-td" style={{ color: '#F1F5F9' }}>{driver.phone || '—'}</td>
+                    <td className="ff-pg-td" style={{ fontFamily: 'monospace', fontSize: 12 }}>{driver.license}</td>
+                    <td className="ff-pg-td">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: expired ? '#EF4444' : expiring ? '#F59E0B' : '#94A3B8', fontWeight: expired ? 600 : 400 }}>
+                          {driver.licenseExpiry || '—'}
                         </span>
                         {(expired || expiring) && (
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                            expired ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
-                          }`}>
-                            {expired ? 'Expired' : 'Soon'}
+                          <span style={{ fontFamily: "'Poppins',sans-serif", fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 5, background: expired ? 'rgba(239,68,68,.12)' : 'rgba(245,158,11,.12)', color: expired ? '#EF4444' : '#F59E0B' }}>
+                            {expired ? 'EXPIRED' : 'SOON'}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3.5">
-                      <ScoreBar score={driver.safetyScore} />
+                    <td className="ff-pg-td">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div className="ff-score-track">
+                          <div className="ff-score-bar" style={{ width: `${driver.safetyScore}%`, background: scoreColor }} />
+                        </div>
+                        <span style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: scoreColor, fontWeight: 600 }}>{driver.safetyScore}</span>
+                      </div>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-700">{driver.tripsCompleted}</td>
-                    <td className="px-5 py-3.5">
-                      <StatusPill status={expired ? 'Expired' : 'Valid'} />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusPill status={driver.status} />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1">
+                    <td className="ff-pg-td" style={{ color: '#F1F5F9' }}>{driver.tripsCompleted}</td>
+                    <td className="ff-pg-td"><StatusPill status={expired ? 'Expired' : 'Valid'} /></td>
+                    <td className="ff-pg-td"><StatusPill status={driver.status} /></td>
+                    <td className="ff-pg-td">
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
                         {driver.status !== 'On Duty' && (
-                          <button onClick={() => updateDriverStatus(driver.id, 'On Duty')}
-                            className="text-xs text-green-600 hover:bg-green-50 px-2 py-1 rounded transition-colors font-medium">
-                            Activate
-                          </button>
+                          <button className="ff-pg-row-action" onClick={() => handleStatusChange(driver.id, 'On Duty')}
+                            style={{ background: 'rgba(16,185,129,.1)', color: '#10B981' }}>Activate</button>
                         )}
                         {driver.status !== 'Off Duty' && (
-                          <button onClick={() => updateDriverStatus(driver.id, 'Off Duty')}
-                            className="text-xs text-gray-500 hover:bg-gray-100 px-2 py-1 rounded transition-colors">
-                            Off Duty
-                          </button>
+                          <button className="ff-pg-row-action" onClick={() => handleStatusChange(driver.id, 'Off Duty')}
+                            style={{ background: 'rgba(255,255,255,.05)', color: '#64748B' }}>Off Duty</button>
                         )}
                         {driver.status !== 'Suspended' && (
-                          <button onClick={() => updateDriverStatus(driver.id, 'Suspended')}
-                            className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">
-                            Suspend
-                          </button>
+                          <button className="ff-pg-row-action" onClick={() => handleStatusChange(driver.id, 'Suspended')}
+                            style={{ background: 'rgba(239,68,68,.08)', color: '#EF4444' }}>Suspend</button>
                         )}
                       </div>
                     </td>
@@ -204,25 +231,59 @@ export function DriversPage() {
             </tbody>
           </table>
         </div>
-        <div className="px-5 py-3 border-t border-gray-100">
-          <p className="text-sm text-gray-500">Showing {filtered.length} of {drivers.length} drivers</p>
+        <div style={{ padding: '10px 20px', borderTop: '1px solid #111318' }}>
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#334155', margin: 0 }}>
+            Showing {filtered.length} of {drivers.length} drivers
+          </p>
         </div>
       </div>
 
-      {/* Compliance Note */}
+      {/* Compliance Alert */}
       {expiredCount > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4">
-          <div className="flex items-center gap-2 mb-1">
-            <ShieldAlert size={16} className="text-red-600" />
-            <p className="text-sm font-medium text-red-800">Compliance Alert</p>
+        <div style={{ background: 'rgba(239,68,68,.07)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 12, padding: '16px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <ShieldAlert size={15} style={{ color: '#EF4444' }} />
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, color: '#EF4444', margin: 0 }}>Compliance Alert</p>
           </div>
-          <p className="text-sm text-red-700">
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#94A3B8', margin: 0 }}>
             {expiredCount} driver{expiredCount > 1 ? 's have' : ' has'} an expired license and{' '}
-            {expiredCount > 1 ? 'are' : 'is'} automatically blocked from trip assignment.
-            Renew license before enabling for dispatch.
+            {expiredCount > 1 ? 'are' : 'is'} automatically blocked from trip assignment. Renew license before enabling for dispatch.
           </p>
         </div>
       )}
+
+      {/* Add Driver Modal */}
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}
+        title="Add New Driver" subtitle="Register a new driver to the fleet">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <FormField label="Driver Name" required>
+            <input value={form.name} onChange={e => field('name', e.target.value)} placeholder="e.g. John Doe" className={inputCls} />
+          </FormField>
+          <FormField label="Phone Number" required>
+            <input value={form.phone} onChange={e => field('phone', e.target.value)} placeholder="e.g. +254 700 000000" className={inputCls} />
+          </FormField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <FormField label="License Number" required>
+              <input value={form.licenseNumber} onChange={e => field('licenseNumber', e.target.value)} placeholder="e.g. DL-TRK-2024-001" className={inputCls} />
+            </FormField>
+            <FormField label="License Expiry">
+              <input type="date" value={form.licenseExpiry} onChange={e => field('licenseExpiry', e.target.value)} className={inputCls} />
+            </FormField>
+          </div>
+          {error && (
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#EF4444', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 8, padding: '10px 14px', margin: 0 }}>
+              {error}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+            <button type="submit" className="ff-pg-btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>
+              {submitting ? 'Saving...' : 'Save Driver'}
+            </button>
+            <button type="button" className="ff-pg-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}
+              onClick={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

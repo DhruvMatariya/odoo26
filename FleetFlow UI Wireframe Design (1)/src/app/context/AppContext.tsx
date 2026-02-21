@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { getStoredSession, setStoredSession, clearStoredSession } from '../services/auth';
+import { authApi, vehiclesApi, driversApi, tripsApi, maintenanceApi } from '../services/api';
+import type { BackendDriver } from '../services/api';
 
 export type UserRole = 'Admin' | 'Fleet Manager' | 'Dispatcher' | 'Driver';
 
@@ -7,6 +10,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  profilePic?: string;
 }
 
 export interface Vehicle {
@@ -23,6 +27,7 @@ export interface Vehicle {
 export interface Driver {
   id: string;
   name: string;
+  phone: string;
   license: string;
   licenseExpiry: string;
   safetyScore: number;
@@ -73,30 +78,11 @@ const INITIAL_VEHICLES: Vehicle[] = [
   { id: 'VH-007', model: 'Yamaha FZ', plate: 'KCG 678G', type: 'Bike', capacity: 100, status: 'Retired', odometer: 125000, purchaseDate: '2018-05-30' },
 ];
 
-const INITIAL_DRIVERS: Driver[] = [
-  { id: 'DR-001', name: 'James Mwangi', license: 'DL-TRK-2019-001', licenseExpiry: '2025-12-31', safetyScore: 92, tripsCompleted: 145, status: 'On Duty', category: 'Truck' },
-  { id: 'DR-002', name: 'Sarah Kamau', license: 'DL-VAN-2020-002', licenseExpiry: '2024-08-15', safetyScore: 88, tripsCompleted: 98, status: 'Off Duty', category: 'Van' },
-  { id: 'DR-003', name: 'Peter Odhiambo', license: 'DL-TRK-2018-003', licenseExpiry: '2023-03-20', safetyScore: 75, tripsCompleted: 210, status: 'Suspended', category: 'Truck' },
-  { id: 'DR-004', name: 'Alice Njeri', license: 'DL-BKE-2022-004', licenseExpiry: '2026-06-30', safetyScore: 95, tripsCompleted: 62, status: 'On Duty', category: 'Bike' },
-  { id: 'DR-005', name: 'David Otieno', license: 'DL-VAN-2021-005', licenseExpiry: '2025-09-10', safetyScore: 83, tripsCompleted: 127, status: 'Off Duty', category: 'Van' },
-];
+const INITIAL_DRIVERS: Driver[] = [];
 
-const INITIAL_TRIPS: Trip[] = [
-  { id: 'TR-001', vehicleId: 'VH-001', driverId: 'DR-001', origin: 'Nairobi', destination: 'Mombasa', status: 'Dispatched', departureTime: '2024-01-15 08:00', eta: '2024-01-15 18:00', cargoWeight: 12000, estimatedCost: 45000 },
-  { id: 'TR-002', vehicleId: 'VH-002', driverId: 'DR-002', origin: 'Nairobi', destination: 'Kisumu', status: 'Completed', departureTime: '2024-01-14 07:00', eta: '2024-01-14 15:00', cargoWeight: 1200, estimatedCost: 18000 },
-  { id: 'TR-003', vehicleId: 'VH-005', driverId: 'DR-005', origin: 'Mombasa', destination: 'Nairobi', status: 'Dispatched', departureTime: '2024-01-15 06:00', eta: '2024-01-15 16:00', cargoWeight: 1800, estimatedCost: 22000 },
-  { id: 'TR-004', vehicleId: 'VH-004', driverId: 'DR-004', origin: 'Nairobi', destination: 'Thika', status: 'Completed', departureTime: '2024-01-13 09:00', eta: '2024-01-13 11:00', cargoWeight: 80, estimatedCost: 3500 },
-  { id: 'TR-005', vehicleId: 'VH-006', driverId: 'DR-001', origin: 'Nairobi', destination: 'Eldoret', status: 'Draft', departureTime: '2024-01-16 08:00', eta: '2024-01-16 16:00', cargoWeight: 18000, estimatedCost: 52000 },
-  { id: 'TR-006', vehicleId: 'VH-002', driverId: 'DR-002', origin: 'Kisumu', destination: 'Nakuru', status: 'Cancelled', departureTime: '2024-01-12 10:00', eta: '2024-01-12 14:00', cargoWeight: 900, estimatedCost: 12000 },
-];
+const INITIAL_TRIPS: Trip[] = [];
 
-const INITIAL_MAINTENANCE: MaintenanceLog[] = [
-  { id: 'MN-001', vehicleId: 'VH-003', issue: 'Engine Oil Change', serviceDate: '2024-01-10', cost: 8500, status: 'Completed' },
-  { id: 'MN-002', vehicleId: 'VH-001', issue: 'Brake Pad Replacement', serviceDate: '2024-01-15', cost: 15000, status: 'Scheduled' },
-  { id: 'MN-003', vehicleId: 'VH-003', issue: 'Transmission Repair', serviceDate: '2024-01-14', cost: 45000, status: 'In Progress' },
-  { id: 'MN-004', vehicleId: 'VH-006', issue: 'Tire Rotation', serviceDate: '2024-01-08', cost: 6000, status: 'Completed' },
-  { id: 'MN-005', vehicleId: 'VH-005', issue: 'Air Filter Replacement', serviceDate: '2024-01-20', cost: 2500, status: 'Scheduled' },
-];
+const INITIAL_MAINTENANCE: MaintenanceLog[] = [];
 
 const INITIAL_EXPENSES: Expense[] = [
   { id: 'EX-001', tripId: 'TR-001', fuelAmount: 120, fuelCost: 18000, otherExpense: 2500, expenseNote: 'Toll fees', date: '2024-01-15' },
@@ -105,33 +91,40 @@ const INITIAL_EXPENSES: Expense[] = [
   { id: 'EX-004', tripId: 'TR-004', fuelAmount: 8, fuelCost: 1200, otherExpense: 0, expenseNote: '', date: '2024-01-13' },
 ];
 
-const DEMO_USERS = [
-  { id: 'U-001', name: 'Alex Administrator', email: 'admin@fleetflow.com',    role: 'Admin'         as UserRole, password: 'password' },
-  { id: 'U-002', name: 'Mike Fleet',         email: 'manager@fleetflow.com',  role: 'Fleet Manager' as UserRole, password: 'password' },
-  { id: 'U-003', name: 'Dana Dispatch',      email: 'dispatcher@fleetflow.com',role: 'Dispatcher'   as UserRole, password: 'password' },
-  { id: 'U-004', name: 'James Mwangi',       email: 'driver@fleetflow.com',   role: 'Driver'        as UserRole, password: 'password' },
-  // Primary demo accounts (shown on login page)
-  { id: 'U-005', name: 'Fleet Manager',      email: 'manager@fleetflow.io',   role: 'Fleet Manager' as UserRole, password: 'demo123' },
-  { id: 'U-006', name: 'Dana Dispatcher',    email: 'dispatch@fleetflow.io',  role: 'Dispatcher'    as UserRole, password: 'demo123' },
-];
+function mapBackendRole(role: string): UserRole {
+  const r = (role || '').toLowerCase();
+  if (r === 'manager') return 'Fleet Manager';
+  if (r === 'dispatcher') return 'Dispatcher';
+  if (r === 'admin') return 'Admin';
+  if (r === 'driver') return 'Driver';
+  return 'Fleet Manager';
+}
 
 interface AppContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
+  authReady: boolean;
   vehicles: Vehicle[];
   drivers: Driver[];
   trips: Trip[];
   maintenance: MaintenanceLog[];
   expenses: Expense[];
-  login: (email: string, password: string, role: UserRole) => boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  addVehicle: (vehicle: Omit<Vehicle, 'id'>) => void;
-  addTrip: (trip: Omit<Trip, 'id'>) => void;
-  addMaintenanceLog: (log: Omit<MaintenanceLog, 'id'>) => void;
+  updateUser: (updates: { name?: string; profilePic?: string }) => void;
+  addVehicle: (vehicle: Omit<Vehicle, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  fetchVehicles: () => Promise<void>;
+  addDriver: (driver: { name: string; phone: string; licenseNumber: string; licenseExpiry?: string }) => Promise<{ success: boolean; error?: string }>;
+  fetchDrivers: () => Promise<void>;
+  addTrip: (trip: Omit<Trip, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  fetchTrips: () => Promise<void>;
+  addMaintenanceLog: (log: Omit<MaintenanceLog, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  fetchMaintenance: () => Promise<void>;
+  updateMaintenanceStatus: (id: string, status: MaintenanceLog['status']) => Promise<{ success: boolean; error?: string }>;
   addExpense: (expense: Omit<Expense, 'id'>) => void;
-  updateVehicleStatus: (id: string, status: Vehicle['status']) => void;
-  updateDriverStatus: (id: string, status: Driver['status']) => void;
-  updateTripStatus: (id: string, status: Trip['status']) => void;
+  updateVehicleStatus: (id: string, status: Vehicle['status']) => Promise<{ success: boolean; error?: string }>;
+  updateDriverStatus: (id: string, status: Driver['status']) => Promise<{ success: boolean; error?: string }>;
+  updateTripStatus: (id: string, status: Trip['status']) => Promise<{ success: boolean; error?: string }>;
   getVehicleById: (id: string) => Vehicle | undefined;
   getDriverById: (id: string) => Driver | undefined;
 }
@@ -141,53 +134,191 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
+  const [authReady, setAuthReady] = useState(false);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>(INITIAL_DRIVERS);
   const [trips, setTrips] = useState<Trip[]>(INITIAL_TRIPS);
   const [maintenance, setMaintenance] = useState<MaintenanceLog[]>(INITIAL_MAINTENANCE);
   const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
 
-  const login = (email: string, password: string, role: UserRole): boolean => {
-    const demoUser = DEMO_USERS.find(u => u.email === email);
-    if (demoUser) {
-      if (demoUser.password !== password) return false;
-      setCurrentUser({ id: demoUser.id, name: demoUser.name, email: demoUser.email, role: demoUser.role });
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    const session = getStoredSession();
+    if (session?.user) {
+      setCurrentUser(session.user);
       setIsAuthenticated(true);
-      return true;
     }
-    // Unknown user — accept any credentials
+    setAuthReady(true);
+  }, []);
+
+  const fetchVehicles = useCallback(async () => {
+    const result = await vehiclesApi.list();
+    if ('error' in result) {
+      console.error('Failed to load vehicles:', result.error);
+      if (result.error === 'No organisation context') {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        clearStoredSession();
+      }
+    } else {
+      setVehicles(result);
+    }
+  }, []);
+
+  function backendDriverToDriver(d: BackendDriver): Driver {
+    const statusMap: Record<string, Driver['status']> = {
+      active: 'On Duty',
+      inactive: 'Off Duty',
+      suspended: 'Suspended',
+    };
+    return {
+      id: d.id,
+      name: d.name,
+      phone: d.phone,
+      license: d.licenseNumber,
+      licenseExpiry: d.licenseExpiry,
+      safetyScore: 0,
+      tripsCompleted: 0,
+      status: statusMap[d.status] || 'Off Duty',
+      category: '',
+    };
+  }
+
+  const fetchDrivers = useCallback(async () => {
+    const result = await driversApi.list();
+    if ('error' in result) {
+      console.error('Failed to load drivers:', result.error);
+    } else {
+      setDrivers(result.map(backendDriverToDriver));
+    }
+  }, []);
+
+  const fetchTrips = useCallback(async () => {
+    const result = await tripsApi.list();
+    if ('error' in result) {
+      console.error('Failed to load trips:', result.error);
+    } else {
+      setTrips(result);
+    }
+  }, []);
+
+  const fetchMaintenance = useCallback(async () => {
+    const result = await maintenanceApi.list();
+    if ('error' in result) {
+      console.error('Failed to load maintenance logs:', result.error);
+    } else {
+      setMaintenance(result);
+    }
+  }, []);
+
+  // Load vehicles, drivers, trips, and maintenance when authenticated
+  useEffect(() => {
+    if (!authReady || !isAuthenticated) return;
+    fetchVehicles();
+    fetchDrivers();
+    fetchTrips();
+    fetchMaintenance();
+  }, [authReady, isAuthenticated, fetchVehicles, fetchDrivers, fetchTrips, fetchMaintenance]);
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const result = await authApi.login(email, password);
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
     const user: User = {
-      id: `U-${Date.now()}`,
-      name: email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      email,
-      role,
+      id: String(result.user.id),
+      name: result.user.name,
+      email: result.user.email,
+      role: mapBackendRole(result.user.role),
     };
     setCurrentUser(user);
     setIsAuthenticated(true);
-    return true;
+    setStoredSession({ token: result.token, user });
+    return { success: true };
   };
 
   const logout = () => {
     setCurrentUser(null);
     setIsAuthenticated(false);
+    clearStoredSession();
   };
 
-  const addVehicle = (vehicle: Omit<Vehicle, 'id'>) => {
-    const id = `VH-${String(vehicles.length + 1).padStart(3, '0')}`;
-    setVehicles(prev => [...prev, { ...vehicle, id }]);
+  const updateUser = (updates: { name?: string; profilePic?: string }) => {
+    setCurrentUser(prev => prev ? { ...prev, ...updates } : prev);
   };
 
-  const addTrip = (trip: Omit<Trip, 'id'>) => {
-    const id = `TR-${String(trips.length + 1).padStart(3, '0')}`;
-    setTrips(prev => [...prev, { ...trip, id }]);
-    setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: 'On Trip' } : v));
-    setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, status: 'On Duty' } : d));
+  const addVehicle = async (vehicle: Omit<Vehicle, 'id'>): Promise<{ success: boolean; error?: string }> => {
+    const result = await vehiclesApi.create({
+      model: vehicle.model,
+      plate: vehicle.plate,
+      type: vehicle.type,
+      capacity: vehicle.capacity,
+      status: vehicle.status,
+      odometer: vehicle.odometer,
+      purchaseDate: vehicle.purchaseDate || undefined,
+    });
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
+    setVehicles(prev => [...prev, result]);
+    return { success: true };
   };
 
-  const addMaintenanceLog = (log: Omit<MaintenanceLog, 'id'>) => {
-    const id = `MN-${String(maintenance.length + 1).padStart(3, '0')}`;
-    setMaintenance(prev => [...prev, { ...log, id }]);
-    setVehicles(prev => prev.map(v => v.id === log.vehicleId ? { ...v, status: 'In Shop' } : v));
+  const addDriver = async (driver: { name: string; phone: string; licenseNumber: string; licenseExpiry?: string }): Promise<{ success: boolean; error?: string }> => {
+    const result = await driversApi.create(driver);
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
+    setDrivers(prev => [...prev, backendDriverToDriver(result)]);
+    return { success: true };
+  };
+
+  const addTrip = async (trip: Omit<Trip, 'id'>): Promise<{ success: boolean; error?: string }> => {
+    const result = await tripsApi.create({
+      vehicleId: trip.vehicleId,
+      driverId: trip.driverId,
+      origin: trip.origin,
+      destination: trip.destination,
+      departureTime: trip.departureTime || undefined,
+      eta: trip.eta || undefined,
+      cargoWeight: trip.cargoWeight,
+      estimatedCost: trip.estimatedCost,
+    });
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
+    setTrips(prev => [...prev, result]);
+    return { success: true };
+  };
+
+  const addMaintenanceLog = async (log: Omit<MaintenanceLog, 'id'>): Promise<{ success: boolean; error?: string }> => {
+    const result = await maintenanceApi.create({
+      vehicleId: log.vehicleId,
+      issue: log.issue,
+      serviceDate: log.serviceDate,
+      cost: log.cost,
+      status: log.status,
+    });
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
+    setMaintenance(prev => [...prev, result]);
+    // Backend sets vehicle to "In Shop" — refresh vehicles
+    fetchVehicles();
+    return { success: true };
+  };
+
+  const updateMaintenanceStatus = async (id: string, status: MaintenanceLog['status']): Promise<{ success: boolean; error?: string }> => {
+    const result = await maintenanceApi.updateStatus(id, status);
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
+    setMaintenance(prev => prev.map(m => m.id === id ? { ...m, status } : m));
+    // Completed may set vehicle back to Available — refresh vehicles
+    if (status === 'Completed') {
+      fetchVehicles();
+    }
+    return { success: true };
   };
 
   const addExpense = (expense: Omit<Expense, 'id'>) => {
@@ -195,19 +326,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setExpenses(prev => [...prev, { ...expense, id }]);
   };
 
-  const updateVehicleStatus = (id: string, status: Vehicle['status']) =>
+  const updateVehicleStatus = async (id: string, status: Vehicle['status']): Promise<{ success: boolean; error?: string }> => {
+    const result = await vehiclesApi.updateStatus(id, status);
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
     setVehicles(prev => prev.map(v => v.id === id ? { ...v, status } : v));
+    return { success: true };
+  };
 
-  const updateDriverStatus = (id: string, status: Driver['status']) =>
+  const updateDriverStatus = async (id: string, status: Driver['status']): Promise<{ success: boolean; error?: string }> => {
+    const backendStatus: Record<string, string> = {
+      'On Duty': 'active',
+      'Off Duty': 'inactive',
+      'Suspended': 'suspended',
+    };
+    const result = await driversApi.updateStatus(id, backendStatus[status] as 'active' | 'inactive' | 'suspended');
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
     setDrivers(prev => prev.map(d => d.id === id ? { ...d, status } : d));
+    return { success: true };
+  };
 
-  const updateTripStatus = (id: string, status: Trip['status']) => {
+  const updateTripStatus = async (id: string, status: Trip['status']): Promise<{ success: boolean; error?: string }> => {
+    const result = await tripsApi.updateStatus(id, status);
+    if ('error' in result) {
+      return { success: false, error: result.error };
+    }
     const trip = trips.find(t => t.id === id);
     setTrips(prev => prev.map(t => t.id === id ? { ...t, status } : t));
     if ((status === 'Completed' || status === 'Cancelled') && trip) {
-      setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: 'Available' } : v));
-      setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, status: 'Off Duty' } : d));
+      // Refresh vehicles and drivers to get updated statuses
+      fetchVehicles();
+      fetchDrivers();
     }
+    return { success: true };
   };
 
   const getVehicleById = (id: string) => vehicles.find(v => v.id === id);
@@ -215,10 +369,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      currentUser, isAuthenticated,
+      currentUser, isAuthenticated, authReady,
       vehicles, drivers, trips, maintenance, expenses,
-      login, logout,
-      addVehicle, addTrip, addMaintenanceLog, addExpense,
+      login, logout, updateUser,
+      addVehicle, fetchVehicles, addDriver, fetchDrivers, addTrip, fetchTrips,
+      addMaintenanceLog, fetchMaintenance, updateMaintenanceStatus, addExpense,
       updateVehicleStatus, updateDriverStatus, updateTripStatus,
       getVehicleById, getDriverById,
     }}>

@@ -1,197 +1,219 @@
 import React, { useState } from 'react';
-import { Plus, Search, AlertTriangle } from 'lucide-react';
+import { Plus, Search, AlertTriangle, CheckCircle2, Wrench } from 'lucide-react';
 import { useApp, MaintenanceLog } from '../context/AppContext';
 import { StatusPill } from '../components/StatusPill';
 import { Modal, FormField, inputCls, selectCls } from '../components/Modal';
+import { toast } from 'sonner';
+
+const DARK_CSS = `
+  .ff-pg-card { background:#0D1017; border:1px solid #1E2330; border-radius:12px; }
+  .ff-pg-table { width:100%; border-collapse:collapse; }
+  .ff-pg-thead tr { background:#0A0C10; border-bottom:1px solid #1E2330; }
+  .ff-pg-th { padding:11px 20px; text-align:left; font-family:'Poppins',sans-serif; font-size:10px; font-weight:600; color:#334155; text-transform:uppercase; letter-spacing:.08em; white-space:nowrap; }
+  .ff-pg-tbody tr { border-bottom:1px solid #111318; transition:background 140ms; }
+  .ff-pg-tbody tr:last-child { border-bottom:none; }
+  .ff-pg-tbody tr:hover { background:rgba(30,42,62,.35); }
+  .ff-pg-td { padding:13px 20px; font-family:'Poppins',sans-serif; font-size:13px; color:#94A3B8; }
+  .ff-pg-search { background:#0A0C10; border:1px solid #1E2330; border-radius:10px; color:#F1F5F9; font-family:'Poppins',sans-serif; font-size:13px; padding:9px 14px 9px 36px; outline:none; width:100%; transition:border-color 200ms,box-shadow 200ms; }
+  .ff-pg-search::placeholder { color:#334155; }
+  .ff-pg-search:focus { border-color:rgba(59,130,246,.45); box-shadow:0 0 0 3px rgba(59,130,246,.08); }
+  .ff-pg-tabs { display:flex; gap:3px; background:#0D1017; border:1px solid #1E2330; border-radius:10px; padding:4px; flex-wrap:wrap; }
+  .ff-pg-tab { padding:6px 14px; border-radius:7px; font-family:'Poppins',sans-serif; font-size:12px; font-weight:500; color:#64748B; cursor:pointer; background:transparent; border:1px solid transparent; transition:all 160ms; white-space:nowrap; }
+  .ff-pg-tab.active { background:#1E2A3E; color:#3B82F6; border-color:rgba(59,130,246,.25); }
+  .ff-pg-tab:not(.active):hover { color:#94A3B8; }
+  .ff-pg-btn-primary { display:flex; align-items:center; gap:6px; padding:9px 16px; background:#3B82F6; border:none; border-radius:8px; color:#fff; font-family:'Poppins',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:background 180ms,box-shadow 180ms; white-space:nowrap; }
+  .ff-pg-btn-primary:hover { background:#2563EB; box-shadow:0 4px 16px rgba(59,130,246,.35); }
+  .ff-pg-btn-ghost { display:flex; align-items:center; gap:6px; padding:9px 14px; background:transparent; border:1px solid #1E2330; border-radius:8px; color:#64748B; font-family:'Poppins',sans-serif; font-size:12px; font-weight:500; cursor:pointer; transition:border-color 160ms,color 160ms; }
+  .ff-pg-btn-ghost:hover { border-color:#334155; color:#94A3B8; }
+`;
 
 const EMPTY_FORM = {
-  vehicleId: '',
-  issue: '',
-  serviceDate: '',
-  cost: '',
+  vehicleId: '', issue: '', serviceDate: '', cost: '',
   status: 'Scheduled' as MaintenanceLog['status'],
 };
 
 export function MaintenancePage() {
-  const { maintenance, vehicles, addMaintenanceLog, getVehicleById } = useApp();
+  const { maintenance, vehicles, addMaintenanceLog, updateMaintenanceStatus, getVehicleById } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const filtered = maintenance.filter(log => {
     const v = getVehicleById(log.vehicleId);
-    const matchSearch = log.id.toLowerCase().includes(search.toLowerCase()) ||
+    const ms = log.id.toLowerCase().includes(search.toLowerCase()) ||
       log.issue.toLowerCase().includes(search.toLowerCase()) ||
       v?.model.toLowerCase().includes(search.toLowerCase()) ||
       log.vehicleId.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'All' || log.status === filterStatus;
-    return matchSearch && matchStatus;
+    return ms && (filterStatus === 'All' || log.status === filterStatus);
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.vehicleId || !form.issue || !form.serviceDate) { setError('Please fill all required fields.'); return; }
-    addMaintenanceLog({
-      vehicleId: form.vehicleId,
-      issue: form.issue,
-      serviceDate: form.serviceDate,
-      cost: Number(form.cost) || 0,
-      status: form.status,
-    });
-    setForm(EMPTY_FORM);
-    setShowModal(false);
-    setError('');
+    setSubmitting(true);
+    try {
+      const result = await addMaintenanceLog({ vehicleId: form.vehicleId, issue: form.issue, serviceDate: form.serviceDate, cost: Number(form.cost) || 0, status: form.status });
+      if (result.success) {
+        toast.success('Maintenance log created successfully.');
+        setForm(EMPTY_FORM); setShowModal(false); setError('');
+      } else {
+        setError(result.error || 'Failed to create log.');
+      }
+    } catch {
+      setError('Unexpected error.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const field = (key: keyof typeof form, value: string) => setForm(prev => ({ ...prev, [key]: value }));
 
-  const totalCost = maintenance.reduce((sum, log) => sum + log.cost, 0);
+  const totalCost = maintenance.reduce((s, l) => s + l.cost, 0);
   const inShopVehicles = vehicles.filter(v => v.status === 'In Shop');
 
+  const summaryCards = [
+    { label: 'Total Maintenance Cost', value: `KES ${totalCost.toLocaleString()}`, sub: 'Across all service logs', color: '#F1F5F9', accent: 'rgba(59,130,246,0.1)', accentColor: '#3B82F6' },
+    { label: 'Vehicles In Shop', value: String(inShopVehicles.length), sub: 'Removed from dispatch queue', color: '#F59E0B', accent: 'rgba(245,158,11,0.1)', accentColor: '#F59E0B' },
+    { label: 'Open Logs', value: String(maintenance.filter(m => m.status !== 'Completed').length), sub: 'Scheduled + In Progress', color: '#3B82F6', accent: 'rgba(59,130,246,0.1)', accentColor: '#3B82F6' },
+  ];
+
   return (
-    <div className="space-y-5">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <style>{DARK_CSS}</style>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Maintenance & Service Logs</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track preventative and reactive vehicle health — {maintenance.length} logs</p>
+          <h1 style={{ fontFamily: "'Poppins',sans-serif", fontSize: 20, fontWeight: 700, color: '#F1F5F9', margin: 0 }}>Maintenance & Service Logs</h1>
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#64748B', margin: '3px 0 0' }}>
+            Track vehicle health — {maintenance.length} logs
+          </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={16} />
-          Log Service
+        <button className="ff-pg-btn-primary" onClick={() => setShowModal(true)}>
+          <Plus size={15} /> Log Service
         </button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-sm text-gray-500">Total Maintenance Cost</p>
-          <p className="text-2xl font-semibold text-gray-900 mt-1">KES {totalCost.toLocaleString()}</p>
-          <p className="text-xs text-gray-400 mt-1">Across all service logs</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-sm text-gray-500">Vehicles In Shop</p>
-          <p className="text-2xl font-semibold text-amber-600 mt-1">{inShopVehicles.length}</p>
-          <p className="text-xs text-gray-400 mt-1">Removed from dispatch queue</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-sm text-gray-500">Open Logs</p>
-          <p className="text-2xl font-semibold text-blue-600 mt-1">
-            {maintenance.filter(m => m.status !== 'Completed').length}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">Scheduled + In Progress</p>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+        {summaryCards.map(card => (
+          <div key={card.label} className="ff-pg-card" style={{ padding: 18 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: card.accent, border: `1px solid ${card.accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: card.accentColor }} />
+            </div>
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, color: '#64748B', margin: '0 0 4px', fontWeight: 500 }}>{card.label}</p>
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 22, fontWeight: 700, color: card.color, margin: '0 0 2px' }}>{card.value}</p>
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, color: '#334155', margin: 0 }}>{card.sub}</p>
+          </div>
+        ))}
       </div>
 
-      {/* In Shop Alert */}
+      {/* In Shop alert */}
       {inShopVehicles.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3.5 flex items-center gap-3">
-          <AlertTriangle size={16} className="text-amber-600 flex-shrink-0" />
-          <p className="text-sm text-amber-800">
-            <span className="font-medium">Vehicles in shop:</span>{' '}
-            {inShopVehicles.map(v => `${v.id} (${v.model})`).join(', ')} — hidden from dispatcher.
+        <div style={{ background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 10, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <AlertTriangle size={15} style={{ color: '#F59E0B', flexShrink: 0 }} />
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#F59E0B', margin: 0 }}>
+            <strong>Vehicles in shop:</strong>{' '}
+            {inShopVehicles.map(v => `${v.id.slice(0, 8)} (${v.model})`).join(', ')} — hidden from dispatcher.
           </p>
         </div>
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search logs, vehicles, issues..."
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
+          <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#334155', pointerEvents: 'none' }} />
+          <input className="ff-pg-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search logs, vehicles, issues..." />
         </div>
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+        <div className="ff-pg-tabs">
           {['All', 'Scheduled', 'In Progress', 'Completed'].map(s => (
-            <button
-              key={s}
-              onClick={() => setFilterStatus(s)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                filterStatus === s ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {s}
-            </button>
+            <button key={s} className={`ff-pg-tab${filterStatus === s ? ' active' : ''}`} onClick={() => setFilterStatus(s)}>{s}</button>
           ))}
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                {['Log ID', 'Vehicle', 'Issue / Service', 'Service Date', 'Cost (KES)', 'Status'].map(col => (
-                  <th key={col} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                    {col}
-                  </th>
+      <div className="ff-pg-card" style={{ overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="ff-pg-table">
+            <thead className="ff-pg-thead">
+              <tr>
+                {['Log ID', 'Vehicle', 'Issue / Service', 'Service Date', 'Cost (KES)', 'Status', 'Actions'].map(col => (
+                  <th key={col} className="ff-pg-th">{col}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="ff-pg-tbody">
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-12 text-center text-sm text-gray-400">No maintenance logs found.</td></tr>
+                <tr><td colSpan={7} style={{ padding: '48px 20px', textAlign: 'center', fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#334155' }}>No maintenance logs found.</td></tr>
               ) : filtered.map(log => {
                 const vehicle = getVehicleById(log.vehicleId);
                 return (
-                  <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3.5 text-sm font-medium text-blue-600">{log.id}</td>
-                    <td className="px-5 py-3.5">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{vehicle?.model ?? log.vehicleId}</p>
-                        <p className="text-xs text-gray-400">{log.vehicleId} · {vehicle?.plate}</p>
+                  <tr key={log.id}>
+                    <td className="ff-pg-td" style={{ color: '#3B82F6', fontWeight: 600 }}>{log.id.slice(0, 8)}</td>
+                    <td className="ff-pg-td">
+                      <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, color: '#F1F5F9', fontWeight: 500, margin: 0 }}>{vehicle?.model ?? log.vehicleId.slice(0, 8)}</p>
+                      <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, color: '#334155', margin: '2px 0 0' }}>{log.vehicleId.slice(0, 8)} · {vehicle?.plate}</p>
+                    </td>
+                    <td className="ff-pg-td" style={{ color: '#F1F5F9' }}>{log.issue}</td>
+                    <td className="ff-pg-td">{log.serviceDate}</td>
+                    <td className="ff-pg-td" style={{ fontWeight: 600, color: '#F1F5F9' }}>{log.cost.toLocaleString()}</td>
+                    <td className="ff-pg-td"><StatusPill status={log.status} /></td>
+                    <td className="ff-pg-td">
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
+                        {log.status === 'Scheduled' && (
+                          <button className="ff-pg-row-action" onClick={async () => {
+                            const r = await updateMaintenanceStatus(log.id, 'In Progress');
+                            r.success ? toast.success('Log moved to In Progress.') : toast.error(r.error || 'Failed.');
+                          }}
+                            style={{ background: 'rgba(59,130,246,.1)', color: '#3B82F6', display: 'flex', alignItems: 'center', gap: 3, padding: '4px 10px', borderRadius: 6, border: 'none', fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                            <Wrench size={11} />Start
+                          </button>
+                        )}
+                        {(log.status === 'Scheduled' || log.status === 'In Progress') && (
+                          <button className="ff-pg-row-action" onClick={async () => {
+                            const r = await updateMaintenanceStatus(log.id, 'Completed');
+                            r.success ? toast.success('Maintenance completed.') : toast.error(r.error || 'Failed.');
+                          }}
+                            style={{ background: 'rgba(16,185,129,.1)', color: '#10B981', display: 'flex', alignItems: 'center', gap: 3, padding: '4px 10px', borderRadius: 6, border: 'none', fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                            <CheckCircle2 size={11} />Complete
+                          </button>
+                        )}
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-700">{log.issue}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{log.serviceDate}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-700 font-medium">{log.cost.toLocaleString()}</td>
-                    <td className="px-5 py-3.5"><StatusPill status={log.status} /></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <div className="px-5 py-3 border-t border-gray-100">
-          <p className="text-sm text-gray-500">
+        <div style={{ padding: '10px 20px', borderTop: '1px solid #111318' }}>
+          <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#334155', margin: 0 }}>
             Showing {filtered.length} of {maintenance.length} logs
-            {filtered.length > 0 && (
-              <span className="ml-2 text-gray-400">
-                · Total shown: KES {filtered.reduce((s, l) => s + l.cost, 0).toLocaleString()}
-              </span>
-            )}
+            {filtered.length > 0 && <span style={{ marginLeft: 8, color: '#1E2330' }}>· Total: KES {filtered.reduce((s, l) => s + l.cost, 0).toLocaleString()}</span>}
           </p>
         </div>
       </div>
 
-      {/* Log Service Modal */}
+      {/* Modal */}
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}
         title="Log New Service" subtitle="Adding a vehicle automatically sets status to In Shop">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <FormField label="Vehicle" required>
             <select value={form.vehicleId} onChange={e => field('vehicleId', e.target.value)} className={selectCls}>
               <option value="">— Select vehicle —</option>
               {vehicles.filter(v => v.status !== 'Retired').map(v => (
-                <option key={v.id} value={v.id}>{v.id} – {v.model} · {v.plate} ({v.status})</option>
+                <option key={v.id} value={v.id}>{v.id.slice(0, 8)} – {v.model} · {v.plate} ({v.status})</option>
               ))}
             </select>
           </FormField>
-
           <FormField label="Issue / Service Description" required>
             <input value={form.issue} onChange={e => field('issue', e.target.value)} placeholder="e.g. Engine oil change, brake pad replacement..." className={inputCls} />
           </FormField>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <FormField label="Service Date" required>
               <input type="date" value={form.serviceDate} onChange={e => field('serviceDate', e.target.value)} className={inputCls} />
             </FormField>
@@ -199,29 +221,23 @@ export function MaintenancePage() {
               <input type="number" value={form.cost} onChange={e => field('cost', e.target.value)} placeholder="e.g. 15000" className={inputCls} />
             </FormField>
           </div>
-
           <FormField label="Status">
             <select value={form.status} onChange={e => field('status', e.target.value)} className={selectCls}>
-              <option>Scheduled</option>
-              <option>In Progress</option>
-              <option>Completed</option>
+              <option>Scheduled</option><option>In Progress</option><option>Completed</option>
             </select>
           </FormField>
-
-          <div className="bg-amber-50 border border-amber-100 rounded-lg px-4 py-3">
-            <p className="text-xs text-amber-700 font-medium">⚠ Auto-logic: Vehicle will be set to "In Shop" status and removed from dispatcher queue.</p>
+          <div style={{ background: 'rgba(245,158,11,.07)', border: '1px solid rgba(245,158,11,.18)', borderRadius: 8, padding: '10px 14px' }}>
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, color: '#F59E0B', fontWeight: 500, margin: 0 }}>
+              ⚠ Auto-logic: Vehicle will be set to "In Shop" and removed from the dispatcher queue.
+            </p>
           </div>
-
-          {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-
-          <div className="flex gap-3 pt-1">
-            <button type="submit" className="flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-              Create Log
-            </button>
-            <button type="button" onClick={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}
-              className="flex-1 bg-gray-100 text-gray-700 py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
-              Cancel
-            </button>
+          {error && (
+            <p style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, color: '#EF4444', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 8, padding: '10px 14px', margin: 0 }}>{error}</p>
+          )}
+          <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+            <button type="submit" className="ff-pg-btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>{submitting ? 'Saving...' : 'Create Log'}</button>
+            <button type="button" className="ff-pg-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}
+              onClick={() => { setShowModal(false); setError(''); setForm(EMPTY_FORM); }}>Cancel</button>
           </div>
         </form>
       </Modal>

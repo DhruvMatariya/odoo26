@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, Truck, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import { useApp, UserRole } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { CursorFollower } from '../components/auth/CursorFollower';
 
@@ -51,7 +51,7 @@ const AUTH_CSS = `
     border: none;
     outline: none;
     color: #F1F5F9;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 14px;
     padding: 13px 14px 13px 44px;
     width: 100%;
@@ -88,7 +88,7 @@ const AUTH_CSS = `
     border: none;
     border-radius: 8px;
     color: #fff;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -111,7 +111,7 @@ const AUTH_CSS = `
     border: 1px solid #1E2330;
     border-radius: 8px;
     color: #64748B;
-    font-family: 'Sora', sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
@@ -183,11 +183,9 @@ export function LoginPage() {
     if (!email || !password) { setError('Please enter your email and password.'); return; }
     setIsLoading(true);
     setError('');
-    await new Promise(r => setTimeout(r, 900));
-    const roleMap: Record<RolePill, UserRole> = { Manager: 'Fleet Manager', Dispatcher: 'Dispatcher' };
-    const ok = login(email, password, roleMap[role]);
-    if (!ok) {
-      setError('Invalid credentials. Check your email and password.');
+    const result = await login(email, password);
+    if (!result.success) {
+      setError(result.error || 'Invalid credentials. Check your email and password.');
       setShakeKey(k => k + 1);
     } else {
       navigate('/dashboard');
@@ -249,11 +247,11 @@ export function LoginPage() {
           display: 'flex',
           boxShadow: '0 0 16px rgba(59,130,246,0.2)',
         }}>
-          <Truck size={16} style={{ color: '#3B82F6' }} />
+          <Truck size={35} style={{ color: '#3B82F6' }} />
         </div>
-        <span style={{ fontFamily: '"DM Mono", monospace', fontWeight: 500, fontSize: 16, color: '#F1F5F9' }}>
+        {/* <span style={{ fontFamily: '"DM Mono", monospace', fontWeight: 500, fontSize: 16, color: '#F1F5F9' }}>
           FleetFlow
-        </span>
+        </span> */}
       </div>
 
       {/* Card */}
@@ -277,6 +275,7 @@ export function LoginPage() {
           backdropFilter: 'blur(16px)',
           boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
         }}>
+          
 
           {/* Header */}
           <div className="ff-fade-1" style={{ marginBottom: 28 }}>
@@ -287,10 +286,11 @@ export function LoginPage() {
               color: '#F1F5F9',
               margin: '0 0 6px',
               lineHeight: 1.2,
+              textAlign:'center',
             }}>
               Welcome back
             </h2>
-            <p style={{ fontFamily: '"Sora", sans-serif', fontSize: 14, color: '#64748B', margin: 0 }}>
+            <p style={{ fontFamily: '"Sora", sans-serif', fontSize: 14, color: '#64748B', margin: 0,textAlign: 'center' }}>
               Sign in to your fleet account
             </p>
           </div>
@@ -346,7 +346,7 @@ export function LoginPage() {
                       gap: 6,
                     }}
                   >
-                    <span>{r === 'Manager' ? '🏢' : '📡'}</span>
+                    <span>{r === 'Manager' ? ' ' : ' '}</span>
                     {r === 'Manager' ? 'Fleet Manager' : 'Dispatcher'}
                   </button>
                 ))}
@@ -438,7 +438,7 @@ export function LoginPage() {
             }}>
               Don't have an account?{' '}
               <span className="ff-link" style={{ fontWeight: 600 }} onClick={() => navigate('/signup')}>
-                Create one →
+                Create →
               </span>
             </div>
           </form>
